@@ -34,8 +34,7 @@ type Params struct {
 
 // TODO: make v2 with buffered channels?
 
-// An Output abstracts the process of funneling samples to an external storage
-// backend, such as a file or something like an InfluxDB instance.
+// An Output abstracts the pro uch as a file or something like an InfluxDB instance.
 //
 // N.B: All outputs should have non-blocking AddMetricSamples() methods and
 // should spawn their own goroutine to flush metrics asynchronously.
