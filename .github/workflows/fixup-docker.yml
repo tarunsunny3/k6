@@ -1,0 +1,25 @@
+name: Fixup k6 v0.40.0 Docker image labels
+on:
+  push:
+    branches:
+      - fixup-docker-images
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  re-publish-docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Log into Docker Hub
+        run: |
+          # Log into Docker Hub Registry
+          echo "${{ secrets.DOCKER_PASS }}" | docker login -u "${{ secrets.DOCKER_USER }}" --password-stdin
+
+      - name: Pull image, re-tag it and push again to Docker Hub
+        run: |
+          set -x
+          docker pull "grafana/k6:v0.40.0"
+          docker tag "grafana/k6:v0.40.0" "grafana/k6:0.40.0"
+          docker push "grafana/k6:0.40.0"
