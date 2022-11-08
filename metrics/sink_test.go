@@ -96,7 +96,10 @@ func TestTrendSink(t *testing.T) {
 			assert.Equal(t, 7.0, sink.Min)
 			assert.Equal(t, 7.0, sink.Max)
 			assert.Equal(t, 7.0, sink.Avg)
-			assert.Equal(t, 0.0, sink.Med) // calculated in Calc()
+
+			// The median value needs to be explicitly calculated
+			// using the the `TrendSink.Calc` method.
+			assert.Equal(t, 0.0, sink.Med)
 		})
 		t.Run("values", func(t *testing.T) {
 			sink := TrendSink{}
@@ -108,7 +111,10 @@ func TestTrendSink(t *testing.T) {
 			assert.Equal(t, 0.0, sink.Min)
 			assert.Equal(t, 100.0, sink.Max)
 			assert.Equal(t, 54.0, sink.Avg)
-			assert.Equal(t, 0.0, sink.Med) // calculated in Calc()
+
+			// The median value needs to be explicitly calculated
+			// using the the `TrendSink.Calc` method.
+			assert.Equal(t, 0.0, sink.Med)
 		})
 	})
 	t.Run("calc", func(t *testing.T) {

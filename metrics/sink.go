@@ -85,6 +85,14 @@ type TrendSink struct {
 // IsEmpty indicates whether the TrendSink is empty.
 func (t *TrendSink) IsEmpty() bool { return t.Count == 0 }
 
+// Add adds a sample to the TrendSink.
+//
+// Note that this method does not compute the median value. The
+// operation is delegated to the Calc() method, which is called
+// automatically when the sink is formatted, or when thresholds
+// are checked. The reason is that calculating the median value
+// is an expensive operation, and we don't want to do it for
+// every sample.
 func (t *TrendSink) Add(s Sample) {
 	t.Values = append(t.Values, s.Value)
 	t.jumbled = true
@@ -125,11 +133,14 @@ func (t *TrendSink) Calc() {
 		return
 	}
 
+	// Sort the values so we can later
+	// pick the median based on its position
+	// in the values array.
 	sort.Float64s(t.Values)
 	t.jumbled = false
 
 	// The median of an even number of values is the average of the middle two.
-	if (t.Count & 0x01) == 0 {
+	if (t.Count % 2) == 0 {
 		t.Med = (t.Values[(t.Count/2)-1] + t.Values[(t.Count/2)]) / 2
 	} else {
 		t.Med = t.Values[t.Count/2]

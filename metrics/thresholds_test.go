@@ -645,9 +645,9 @@ func TestThresholdsRun(t *testing.T) {
 	// If values are not added to the sink via its `Add` method,
 	// the sinks `jumbled` flag will remain false.
 	filledTrendSink := &TrendSink{}
+	filledTrendSink.Add(Sample{Time: time.Now(), Value: 90})
 	filledTrendSink.Add(Sample{Time: time.Now(), Value: 80})
-	filledTrendSink.Add(Sample{Time: time.Now(), Value: 80})
-	filledTrendSink.Add(Sample{Time: time.Now(), Value: 80})
+	filledTrendSink.Add(Sample{Time: time.Now(), Value: 100})
 
 	type args struct {
 		sink       Sink
@@ -736,7 +736,6 @@ func TestThresholdsRun(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			t.Parallel()
 
-			// thresholds := NewThresholds([]string{"p(95)<2000"})
 			gotParseErr := testCase.args.thresholds.Parse()
 			require.NoError(t, gotParseErr)
 
