@@ -188,7 +188,12 @@ func (ts *Thresholds) Run(sink Sink, duration time.Duration) (bool, error) {
 		ts.sinked["min"] = sinkImpl.Min
 		ts.sinked["max"] = sinkImpl.Max
 		ts.sinked["avg"] = sinkImpl.Avg
-		ts.sinked["med"] = sinkImpl.Med
+
+		// Computing the trend's median value is equivalent
+		// to computing its 50th percentile value.
+		// As this can turn out to be a rather computationally
+		// expensive operation, we do this just in time.
+		ts.sinked["med"] = sinkImpl.P(0.5)
 
 		// Parse the percentile thresholds and insert them in
 		// the sinks mapping.
