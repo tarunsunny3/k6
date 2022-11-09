@@ -32,7 +32,6 @@ func TestCounterSink(t *testing.T) {
 	})
 	t.Run("calc", func(t *testing.T) {
 		sink := CounterSink{}
-		sink.Calc()
 		assert.Equal(t, 0.0, sink.Value)
 		assert.Equal(t, time.Time{}, sink.First)
 	})
@@ -70,7 +69,6 @@ func TestGaugeSink(t *testing.T) {
 	})
 	t.Run("calc", func(t *testing.T) {
 		sink := GaugeSink{}
-		sink.Calc()
 		assert.Equal(t, 0.0, sink.Value)
 		assert.Equal(t, 0.0, sink.Min)
 		assert.Equal(t, false, sink.minSet)
@@ -86,7 +84,6 @@ func TestGaugeSink(t *testing.T) {
 }
 
 func TestTrendSink(t *testing.T) {
-	unsortedSamples5 := []float64{0.0, 5.0, 10.0, 3.0, 1.0}
 	unsortedSamples10 := []float64{0.0, 100.0, 30.0, 80.0, 70.0, 60.0, 50.0, 40.0, 90.0, 20.0}
 
 	t.Run("add", func(t *testing.T) {
@@ -94,7 +91,7 @@ func TestTrendSink(t *testing.T) {
 			sink := TrendSink{}
 			sink.Add(Sample{TimeSeries: TimeSeries{Metric: &Metric{}}, Value: 7.0})
 			assert.Equal(t, uint64(1), sink.Count)
-			assert.Equal(t, true, sink.jumbled)
+			assert.Equal(t, false, sink.sorted)
 			assert.Equal(t, 7.0, sink.Min)
 			assert.Equal(t, 7.0, sink.Max)
 			assert.Equal(t, 7.0, sink.Avg)
@@ -109,7 +106,7 @@ func TestTrendSink(t *testing.T) {
 				sink.Add(Sample{TimeSeries: TimeSeries{Metric: &Metric{}}, Value: s})
 			}
 			assert.Equal(t, uint64(len(unsortedSamples10)), sink.Count)
-			assert.Equal(t, true, sink.jumbled)
+			assert.Equal(t, false, sink.sorted)
 			assert.Equal(t, 0.0, sink.Min)
 			assert.Equal(t, 100.0, sink.Max)
 			assert.Equal(t, 54.0, sink.Avg)
@@ -117,38 +114,6 @@ func TestTrendSink(t *testing.T) {
 			// The median value needs to be explicitly calculated
 			// using the the `TrendSink.Calc` method.
 			assert.Equal(t, 0.0, sink.Med)
-		})
-	})
-	t.Run("calc", func(t *testing.T) {
-		t.Run("no values", func(t *testing.T) {
-			sink := TrendSink{}
-			sink.Calc()
-			assert.Equal(t, uint64(0), sink.Count)
-			assert.Equal(t, false, sink.jumbled)
-			assert.Equal(t, 0.0, sink.Med)
-		})
-		t.Run("odd number of samples median", func(t *testing.T) {
-			sink := TrendSink{}
-			for _, s := range unsortedSamples5 {
-				sink.Add(Sample{TimeSeries: TimeSeries{Metric: &Metric{}}, Value: s})
-			}
-			sink.Calc()
-			assert.Equal(t, uint64(len(unsortedSamples5)), sink.Count)
-			assert.Equal(t, false, sink.jumbled)
-			assert.Equal(t, 3.0, sink.Med)
-		})
-		t.Run("sorted", func(t *testing.T) {
-			sink := TrendSink{}
-			for _, s := range unsortedSamples10 {
-				sink.Add(Sample{TimeSeries: TimeSeries{Metric: &Metric{}}, Value: s})
-			}
-			sink.Calc()
-			assert.Equal(t, uint64(len(unsortedSamples10)), sink.Count)
-			assert.Equal(t, false, sink.jumbled)
-			assert.Equal(t, 55.0, sink.Med)
-			assert.Equal(t, 0.0, sink.Min)
-			assert.Equal(t, 100.0, sink.Max)
-			assert.Equal(t, 54.0, sink.Avg)
 		})
 	})
 
@@ -264,37 +229,6 @@ func BenchmarkTrendSink(b *testing.B) {
 			})
 		}
 	})
-
-	b.Run("Calc", func(b *testing.B) {
-		// Note that we mix odd and even numbers as
-		// they correspond to different code paths
-		// in the algorithm.
-		var table = []struct {
-			sinkSize int
-		}{
-			{sinkSize: 10},
-			{sinkSize: 11},
-			{sinkSize: 100},
-			{sinkSize: 101},
-			{sinkSize: 1000},
-			{sinkSize: 1001},
-			{sinkSize: 10000},
-			{sinkSize: 10001},
-		}
-
-		for _, v := range table {
-			b.Run(fmt.Sprintf("with_%d_values", v.sinkSize), func(b *testing.B) {
-				sink := TrendSink{Values: values[0:v.sinkSize]}
-				sink.Count = uint64(v.sinkSize)
-				sink.jumbled = true
-
-				b.ResetTimer()
-				for i := 0; i < b.N; i++ {
-					sink.Calc()
-				}
-			})
-		}
-	})
 }
 
 func TestRateSink(t *testing.T) {
@@ -324,7 +258,6 @@ func TestRateSink(t *testing.T) {
 	})
 	t.Run("calc", func(t *testing.T) {
 		sink := RateSink{}
-		sink.Calc()
 		assert.Equal(t, int64(0), sink.Total)
 		assert.Equal(t, int64(0), sink.Trues)
 	})

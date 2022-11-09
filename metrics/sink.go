@@ -17,7 +17,6 @@ var (
 
 type Sink interface {
 	Add(s Sample)                              // Add a sample to the sink.
-	Calc()                                     // Make final calculations.
 	Format(t time.Duration) map[string]float64 // Data for thresholds.
 	IsEmpty() bool                             // Check if the Sink is empty.
 }
@@ -36,8 +35,6 @@ func (c *CounterSink) Add(s Sample) {
 
 // IsEmpty indicates whether the CounterSink is empty.
 func (c *CounterSink) IsEmpty() bool { return c.First.IsZero() }
-
-func (c *CounterSink) Calc() {}
 
 func (c *CounterSink) Format(t time.Duration) map[string]float64 {
 	return map[string]float64{
@@ -66,15 +63,13 @@ func (g *GaugeSink) Add(s Sample) {
 	}
 }
 
-func (g *GaugeSink) Calc() {}
-
 func (g *GaugeSink) Format(t time.Duration) map[string]float64 {
 	return map[string]float64{"value": g.Value}
 }
 
 type TrendSink struct {
-	Values  []float64
-	jumbled bool
+	Values []float64
+	sorted bool
 
 	Count    uint64
 	Min, Max float64
@@ -95,7 +90,7 @@ func (t *TrendSink) IsEmpty() bool { return t.Count == 0 }
 // every sample.
 func (t *TrendSink) Add(s Sample) {
 	t.Values = append(t.Values, s.Value)
-	t.jumbled = true
+	t.sorted = false
 	t.Count += 1
 	t.Sum += s.Value
 	t.Avg = t.Sum / float64(t.Count)
@@ -116,10 +111,13 @@ func (t *TrendSink) P(pct float64) float64 {
 	case 1:
 		return t.Values[0]
 	default:
+		if !t.sorted {
+			sort.Float64s(t.Values)
+		}
+
 		// If percentile falls on a value in Values slice, we return that value.
 		// If percentile does not fall on a value in Values slice, we calculate (linear interpolation)
 		// the value that would fall at percentile, given the values above and below that percentile.
-		t.Calc()
 		i := pct * (float64(t.Count) - 1.0)
 		j := t.Values[int(math.Floor(i))]
 		k := t.Values[int(math.Ceil(i))]
@@ -128,33 +126,13 @@ func (t *TrendSink) P(pct float64) float64 {
 	}
 }
 
-func (t *TrendSink) Calc() {
-	if !t.jumbled {
-		return
-	}
-
-	// Sort the values so we can later
-	// pick the median based on its position
-	// in the values array.
-	sort.Float64s(t.Values)
-	t.jumbled = false
-
-	// The median of an even number of values is the average of the middle two.
-	if (t.Count % 2) == 0 {
-		t.Med = (t.Values[(t.Count/2)-1] + t.Values[(t.Count/2)]) / 2
-	} else {
-		t.Med = t.Values[t.Count/2]
-	}
-}
-
 func (t *TrendSink) Format(tt time.Duration) map[string]float64 {
-	t.Calc()
 	// TODO: respect the summaryTrendStats for REST API
 	return map[string]float64{
 		"min":   t.Min,
 		"max":   t.Max,
 		"avg":   t.Avg,
-		"med":   t.Med,
+		"med":   t.P(0.5),
 		"p(90)": t.P(0.90),
 		"p(95)": t.P(0.95),
 	}
@@ -174,8 +152,6 @@ func (r *RateSink) Add(s Sample) {
 		r.Trues += 1
 	}
 }
-
-func (r RateSink) Calc() {}
 
 func (r RateSink) Format(t time.Duration) map[string]float64 {
 	var rate float64
