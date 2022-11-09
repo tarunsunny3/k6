@@ -1,6 +1,8 @@
 package metrics
 
 import (
+	"fmt"
+	"math/rand"
 	"testing"
 	"time"
 
@@ -205,6 +207,92 @@ func TestTrendSink(t *testing.T) {
 		for k, expV := range expected {
 			assert.Contains(t, result, k)
 			assert.InDelta(t, expV, result[k], tolerance)
+		}
+	})
+}
+
+func BenchmarkTrendSink(b *testing.B) {
+	// Produce a fixed random values set for the benchmark.
+	values := make([]float64, 0, 10001)
+	for i := 0; i < 10000; i++ {
+		values = append(values, rand.Float64()*100)
+	}
+
+	b.Run("P", func(b *testing.B) {
+		// Prepare a sample size table to control the
+		// variation of the number of samples for each
+		// benchmark.
+		var table = []struct {
+			percentile float64
+			sinkSize   int
+		}{
+			// 50th percentile
+			// Note that computing the 50th percentile is equivalent
+			// to computing the median.
+			{percentile: 0.5, sinkSize: 10},
+			{percentile: 0.5, sinkSize: 100},
+			{percentile: 0.5, sinkSize: 1000},
+			{percentile: 0.5, sinkSize: 10000},
+
+			// 90th percentile
+			{percentile: 0.9, sinkSize: 10},
+			{percentile: 0.9, sinkSize: 100},
+			{percentile: 0.9, sinkSize: 1000},
+			{percentile: 0.9, sinkSize: 10000},
+
+			// 95th percentile
+			{percentile: 0.95, sinkSize: 10},
+			{percentile: 0.95, sinkSize: 100},
+			{percentile: 0.95, sinkSize: 1000},
+			{percentile: 0.95, sinkSize: 10000},
+
+			// 99th percentile
+			{percentile: 0.99, sinkSize: 10},
+			{percentile: 0.99, sinkSize: 100},
+			{percentile: 0.99, sinkSize: 1000},
+			{percentile: 0.99, sinkSize: 10000},
+		}
+
+		for _, v := range table {
+			b.Run(fmt.Sprintf("%d_with_%d_values", int(v.percentile*100), v.sinkSize), func(b *testing.B) {
+				sink := TrendSink{Values: values[0:v.sinkSize]}
+
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					sink.P(v.percentile)
+				}
+			})
+		}
+	})
+
+	b.Run("Calc", func(b *testing.B) {
+		// Note that we mix odd and even numbers as
+		// they correspond to different code paths
+		// in the algorithm.
+		var table = []struct {
+			sinkSize int
+		}{
+			{sinkSize: 10},
+			{sinkSize: 11},
+			{sinkSize: 100},
+			{sinkSize: 101},
+			{sinkSize: 1000},
+			{sinkSize: 1001},
+			{sinkSize: 10000},
+			{sinkSize: 10001},
+		}
+
+		for _, v := range table {
+			b.Run(fmt.Sprintf("with_%d_values", v.sinkSize), func(b *testing.B) {
+				sink := TrendSink{Values: values[0:v.sinkSize]}
+				sink.Count = uint64(v.sinkSize)
+				sink.jumbled = true
+
+				b.ResetTimer()
+				for i := 0; i < b.N; i++ {
+					sink.Calc()
+				}
+			})
 		}
 	})
 }
