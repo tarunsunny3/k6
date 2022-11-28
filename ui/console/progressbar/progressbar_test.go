@@ -1,4 +1,4 @@
-package pb
+package progressbar
 
 import (
 	"testing"

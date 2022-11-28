@@ -1,4 +1,4 @@
-package ui
+package console
 
 import (
 	"bytes"
@@ -19,19 +19,68 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"go.k6.io/k6/lib"
-	"go.k6.io/k6/lib/consts"
-	"go.k6.io/k6/output"
-	"go.k6.io/k6/ui/pb"
+	"go.k6.io/k6/ui/console/progressbar"
 )
 
-const (
-	// Max length of left-side progress bar text before trimming is forced
-	maxLeftLength = 30
-	// Amount of padding in chars between rendered progress
-	// bar text and right-side terminal window edge.
-	termPadding      = 1
-	defaultTermWidth = 80
-)
+// Console enables synced writing to stdout and stderr ...
+type Console struct {
+	IsTTY          bool
+	writeMx        *sync.Mutex
+	Stdout, Stderr io.Writer
+	Stdin          io.Reader
+	quiet          bool
+	theme          *theme
+	logger         *logrus.Logger
+}
+
+func New(quiet, colorize bool) *Console {
+	writeMx := &sync.Mutex{}
+	stdout := newConsoleWriter(os.Stdout, writeMx)
+	stderr := newConsoleWriter(os.Stderr, writeMx)
+	isTTY := stdout.isTTY && stderr.isTTY
+
+	// Default logger without any formatting
+	logger := &logrus.Logger{
+		Out:       stderr,
+		Formatter: new(logrus.TextFormatter), // no fancy formatting here
+		Hooks:     make(logrus.LevelHooks),
+		Level:     logrus.InfoLevel,
+	}
+
+	var th *theme
+	// Only enable themes and a fancy logger if we're in a TTY
+	if isTTY && colorize {
+		th = &theme{foreground: getColor(color.FgCyan)}
+
+		logger = &logrus.Logger{
+			Out: stderr,
+			Formatter: &logrus.TextFormatter{
+				ForceColors:   true,
+				DisableColors: false,
+			},
+			Hooks: make(logrus.LevelHooks),
+			Level: logrus.InfoLevel,
+		}
+	}
+
+	return &Console{
+		IsTTY:   isTTY,
+		writeMx: writeMx,
+		Stdout:  stdout,
+		Stderr:  stderr,
+		Stdin:   os.Stdin,
+		theme:   th,
+		logger:  logger,
+	}
+}
+
+func (c *Console) Logger() *logrus.Logger {
+	return c.logger
+}
+
+type theme struct {
+	foreground *color.Color
+}
 
 // A writer that syncs writes with a mutex and, if the output is a TTY, clears before newlines.
 type consoleWriter struct {
@@ -46,25 +95,6 @@ type consoleWriter struct {
 type osFile interface {
 	io.Writer
 	Fd() uintptr
-}
-
-// Console enables synced writing to stdout and stderr ...
-type Console struct {
-	writeMx        *sync.Mutex
-	stdout, stderr *consoleWriter
-	stdin          io.Reader
-
-	quiet bool
-}
-
-func NewConsole() *Console {
-	writeMx := &sync.Mutex{}
-	return &Console{
-		writeMx: writeMx,
-		stdout:  newConsoleWriter(os.Stdout, writeMx),
-		stderr:  newConsoleWriter(os.Stderr, writeMx),
-		stdin:   os.Stdin,
-	}
 }
 
 func newConsoleWriter(out osFile, mx *sync.Mutex) *consoleWriter {
@@ -97,45 +127,46 @@ func (w *consoleWriter) Write(p []byte) (n int, err error) {
 // getColor returns the requested color, or an uncolored object, depending on
 // the value of noColor. The explicit EnableColor() and DisableColor() are
 // needed because the library checks os.Stdout itself otherwise...
-func getColor(noColor bool, attributes ...color.Attribute) *color.Color {
-	if noColor {
-		c := color.New()
-		c.DisableColor()
-		return c
-	}
+func getColor(attributes ...color.Attribute) *color.Color {
+	// if noColor {
+	// 	c := color.New()
+	// 	c.DisableColor()
+	// 	return c
+	// }
 
 	c := color.New(attributes...)
 	c.EnableColor()
 	return c
 }
 
-func getBanner(noColor bool) string {
-	c := getColor(noColor, color.FgCyan)
-	return c.Sprint(consts.Banner())
-}
-
-func printBanner(gs *globalState) {
-	if gs.flags.quiet {
-		return // do not print banner when --quiet is enabled
+func (c *Console) ApplyTheme(s string) string {
+	if c.theme != nil {
+		return c.theme.foreground.Sprint(s)
 	}
 
-	banner := getBanner(gs.flags.noColor || !gs.stdOut.isTTY)
-	_, err := fmt.Fprintf(gs.stdOut, "\n%s\n\n", banner)
+	return s
+}
+
+func (c *Console) Print(s string) {
+	if _, err := fmt.Fprint(c.Stdout, s); err != nil {
+		c.logger.Errorf("could not print '%s' to stdout: %s", s, err.Error())
+	}
+}
+
+func (c *Console) PrintBanner() {
+	_, err := fmt.Fprintf(c.Stdout, "\n%s\n\n", c.ApplyTheme(banner))
 	if err != nil {
-		gs.logger.Warnf("could not print k6 banner message to stdout: %s", err.Error())
+		c.logger.Warnf("could not print k6 banner message to stdout: %s", err.Error())
 	}
 }
 
-func printBar(gs *globalState, bar *pb.ProgressBar) {
-	if gs.flags.quiet {
-		return
-	}
+func (c *Console) PrintBar(pb *progressbar.ProgressBar) {
 	end := "\n"
 	// TODO: refactor widthDelta away? make the progressbar rendering a bit more
 	// stateless... basically first render the left and right parts, so we know
 	// how long the longest line is, and how much space we have for the progress
 	widthDelta := -defaultTermWidth
-	if gs.stdOut.isTTY {
+	if c.IsTTY {
 		// If we're in a TTY, instead of printing the bar and going to the next
 		// line, erase everything till the end of the line and return to the
 		// start, so that the next print will overwrite the same line.
@@ -144,68 +175,14 @@ func printBar(gs *globalState, bar *pb.ProgressBar) {
 		end = "\x1b[0K\r"
 		widthDelta = 0
 	}
-	rendered := bar.Render(0, widthDelta)
+	rendered := pb.Render(0, widthDelta)
 	// Only output the left and middle part of the progress bar
-	printToStdout(gs, rendered.String()+end)
+	c.Print(rendered.String() + end)
 }
 
-func modifyAndPrintBar(gs *globalState, bar *pb.ProgressBar, options ...pb.ProgressBarOption) {
+func (c *Console) ModifyAndPrintBar(bar *progressbar.ProgressBar, options ...progressbar.ProgressBarOption) {
 	bar.Modify(options...)
-	printBar(gs, bar)
-}
-
-// Print execution description for both cloud and local execution.
-// TODO: Clean this up as part of #1499 or #1427
-func printExecutionDescription(
-	gs *globalState, execution, filename, outputOverride string, conf Config,
-	et *lib.ExecutionTuple, execPlan []lib.ExecutionStep, outputs []output.Output,
-) {
-	noColor := gs.flags.noColor || !gs.stdOut.isTTY
-	valueColor := getColor(noColor, color.FgCyan)
-
-	buf := &strings.Builder{}
-	fmt.Fprintf(buf, "  execution: %s\n", valueColor.Sprint(execution))
-	fmt.Fprintf(buf, "     script: %s\n", valueColor.Sprint(filename))
-
-	var outputDescriptions []string
-	switch {
-	case outputOverride != "":
-		outputDescriptions = []string{outputOverride}
-	case len(outputs) == 0:
-		outputDescriptions = []string{"-"}
-	default:
-		for _, out := range outputs {
-			outputDescriptions = append(outputDescriptions, out.Description())
-		}
-	}
-
-	fmt.Fprintf(buf, "     output: %s\n", valueColor.Sprint(strings.Join(outputDescriptions, ", ")))
-	fmt.Fprintf(buf, "\n")
-
-	maxDuration, _ := lib.GetEndOffset(execPlan)
-	executorConfigs := conf.Scenarios.GetSortedConfigs()
-
-	scenarioDesc := "1 scenario"
-	if len(executorConfigs) > 1 {
-		scenarioDesc = fmt.Sprintf("%d scenarios", len(executorConfigs))
-	}
-
-	fmt.Fprintf(buf, "  scenarios: %s\n", valueColor.Sprintf(
-		"(%.2f%%) %s, %d max VUs, %s max duration (incl. graceful stop):",
-		conf.ExecutionSegment.FloatLength()*100, scenarioDesc,
-		lib.GetMaxPossibleVUs(execPlan), maxDuration.Round(100*time.Millisecond)),
-	)
-	for _, ec := range executorConfigs {
-		fmt.Fprintf(buf, "           * %s: %s\n",
-			ec.GetName(), ec.GetDescription(et))
-	}
-	fmt.Fprintf(buf, "\n")
-
-	if gs.flags.quiet {
-		gs.logger.Debug(buf.String())
-	} else {
-		printToStdout(gs, buf.String())
-	}
+	c.PrintBar(bar)
 }
 
 //nolint:funlen

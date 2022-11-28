@@ -10,7 +10,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -145,13 +144,8 @@ func (c *rootCommand) execute() {
 // Execute adds all child commands to the root command sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	outMx := &sync.Mutex{}
-	gs := state.NewGlobalState(
-		context.Background(),
-		newConsoleWriter(os.Stdout, outMx),
-		newConsoleWriter(os.Stderr, outMx),
-	)
-
+	env := buildEnvMap(os.Environ())
+	gs := state.NewGlobalState(context.Background(), os.Args, env)
 	newRootCommand(gs).execute()
 }
 
@@ -226,6 +220,7 @@ func (c *rootCommand) setupLoggers() (<-chan struct{}, error) {
 		c.globalState.logger.SetLevel(logrus.DebugLevel)
 	}
 
+	// TODO: Get rid of the color checks
 	loggerForceColors := false // disable color by default
 	switch line := c.globalState.flags.logOutput; {
 	case line == "stderr":

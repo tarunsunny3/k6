@@ -2,13 +2,14 @@ package state
 
 import (
 	"context"
-	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
+
+	"go.k6.io/k6/ui/console"
 )
 
 const defaultConfigFileName = "config.json"
@@ -27,26 +28,17 @@ const defaultConfigFileName = "config.json"
 // parameters, while `newGlobalTestState()` can be used in tests to create
 // simulated environments.
 type GlobalState struct {
-	ctx context.Context
-
-	fs      afero.Fs
-	getwd   func() (string, error)
-	args    []string
-	envVars map[string]string
-
+	ctx                 context.Context
+	fs                  afero.Fs
+	getWD               func() (string, error)
+	cmdArgs             []string
+	env                 map[string]string
 	defaultFlags, flags globalFlags
-
-	console
-	// outMutex       *sync.Mutex
-	// stdOut, stdErr *consoleWriter
-	// stdIn          io.Reader
-
-	osExit       func(int)
-	signalNotify func(chan<- os.Signal, ...os.Signal)
-	signalStop   func(chan<- os.Signal)
-
-	logger         *logrus.Logger
-	fallbackLogger logrus.FieldLogger
+	console             *console.Console
+	osExit              func(int)
+	signalNotify        func(chan<- os.Signal, ...os.Signal)
+	signalStop          func(chan<- os.Signal)
+	logger              *logrus.Logger
 }
 
 // NewGlobalState returns a new GlobalState with the given ctx.
@@ -54,49 +46,38 @@ type GlobalState struct {
 // global variables and functions from the os package. Anywhere else, things
 // like os.Stdout, os.Stderr, os.Stdin, os.Getenv(), etc. should be removed and
 // the respective properties of globalState used instead.
-func NewGlobalState(ctx context.Context, stdOut, stdErr io.Writer) *GlobalState {
-	envVars := buildEnvMap(os.Environ())
-	_, noColorsSet := envVars["NO_COLOR"] // even empty values disable colors
-	logger := &logrus.Logger{
-		Out: stdErr,
-		Formatter: &logrus.TextFormatter{
-			ForceColors:   stderrTTY,
-			DisableColors: !stderrTTY || noColorsSet || envVars["K6_NO_COLOR"] != "",
-		},
-		Hooks: make(logrus.LevelHooks),
-		Level: logrus.InfoLevel,
-	}
-
+func NewGlobalState(ctx context.Context, cmdArgs []string, env map[string]string) *GlobalState {
+	var logger *logrus.Logger
 	confDir, err := os.UserConfigDir()
 	if err != nil {
-		logger.WithError(err).Warn("could not get config directory")
+		// The logger is initialized in the Console constructor, which so defer
+		// logging of this error.
+		defer func() {
+			logger.WithError(err).Warn("could not get config directory")
+		}()
 		confDir = ".config"
 	}
-
 	defaultFlags := getDefaultFlags(confDir)
+	flags := getFlags(defaultFlags, env)
+
+	_, noColorsSet := env["NO_COLOR"] // even empty values disable colors
+	colorizeOutput := !noColorsSet || env["K6_NO_COLOR"] == ""
+	cons := console.New(flags.quiet, colorizeOutput)
+	logger = cons.Logger()
 
 	return &GlobalState{
 		ctx:          ctx,
 		fs:           afero.NewOsFs(),
-		getwd:        os.Getwd,
-		args:         append(make([]string, 0, len(os.Args)), os.Args...), // copy
-		envVars:      envVars,
+		getWD:        os.Getwd,
+		cmdArgs:      cmdArgs,
+		env:          env,
 		defaultFlags: defaultFlags,
-		flags:        getFlags(defaultFlags, envVars),
-		outMutex:     outMutex,
-		stdOut:       stdOut,
-		stdErr:       stdErr,
-		stdIn:        os.Stdin,
+		flags:        flags,
+		console:      cons,
 		osExit:       os.Exit,
 		signalNotify: signal.Notify,
 		signalStop:   signal.Stop,
 		logger:       logger,
-		fallbackLogger: &logrus.Logger{ // we may modify the other one
-			Out:       stdErr,
-			Formatter: new(logrus.TextFormatter), // no fancy formatting here
-			Hooks:     make(logrus.LevelHooks),
-			Level:     logrus.InfoLevel,
-		},
 	}
 }
 
@@ -111,10 +92,10 @@ type globalFlags struct {
 	verbose        bool
 }
 
-func getDefaultFlags(homeFolder string) globalFlags {
+func getDefaultFlags(homeDir string) globalFlags {
 	return globalFlags{
 		address:        "localhost:6565",
-		configFilePath: filepath.Join(homeFolder, "loadimpact", "k6", defaultConfigFileName),
+		configFilePath: filepath.Join(homeDir, "loadimpact", "k6", defaultConfigFileName),
 		logOutput:      "stderr",
 	}
 }

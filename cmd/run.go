@@ -25,6 +25,7 @@ import (
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/lib"
 	"go.k6.io/k6/lib/consts"
+	"go.k6.io/k6/ui/console/progressbar"
 	"go.k6.io/k6/ui/pb"
 )
 
@@ -36,7 +37,9 @@ type cmdRun struct {
 // TODO: split apart some more
 //nolint:funlen,gocognit,gocyclo,cyclop
 func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
-	printBanner(c.gs)
+	if !c.gs.Console.Quiet {
+		c.gs.Console.PrintBanner()
+	}
 
 	test, err := loadAndConfigureTest(c.gs, cmd, args, getConfig)
 	if err != nil {
@@ -85,7 +88,7 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 	progressBarWG := &sync.WaitGroup{}
 	progressBarWG.Add(1)
 	go func() {
-		pbs := []*pb.ProgressBar{execScheduler.GetInitProgressBar()}
+		pbs := []*progressbar.ProgressBar{execScheduler.GetInitProgressBar()}
 		for _, s := range execScheduler.GetExecutors() {
 			pbs = append(pbs, s.GetProgress())
 		}
@@ -138,9 +141,15 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 	}
 	defer engine.OutputManager.StopOutputs()
 
-	printExecutionDescription(
-		c.gs, "local", args[0], "", conf, execScheduler.GetState().ExecutionTuple, executionPlan, outputs,
+	execDesc := getExecutionDescription(
+		c.gs.Console.ApplyTheme, "local", args[0], "", conf,
+		execScheduler.GetState().ExecutionTuple, executionPlan, outputs,
 	)
+	if c.gs.flags.quiet {
+		c.gs.logger.Debug(execDesc)
+	} else {
+		c.gs.Console.Print(execDesc)
+	}
 
 	// Trap Interrupts, SIGINTs and SIGTERMs.
 	gracefulStop := func(sig os.Signal) {
