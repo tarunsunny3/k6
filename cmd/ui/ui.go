@@ -1,4 +1,4 @@
-package cmd
+package ui
 
 import (
 	"bytes"
@@ -12,6 +12,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/fatih/color"
+	"github.com/mattn/go-isatty"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
 
@@ -34,13 +35,42 @@ const (
 
 // A writer that syncs writes with a mutex and, if the output is a TTY, clears before newlines.
 type consoleWriter struct {
-	rawOut *os.File
-	writer io.Writer
-	isTTY  bool
-	mutex  *sync.Mutex
+	out   io.Writer
+	isTTY bool
+	mutex *sync.Mutex
 
 	// Used for flicker-free persistent objects like the progressbars
 	persistentText func()
+}
+
+type osFile interface {
+	io.Writer
+	Fd() uintptr
+}
+
+// Console enables synced writing to stdout and stderr ...
+type Console struct {
+	writeMx        *sync.Mutex
+	stdout, stderr *consoleWriter
+	stdin          io.Reader
+
+	quiet bool
+}
+
+func NewConsole() *Console {
+	writeMx := &sync.Mutex{}
+	return &Console{
+		writeMx: writeMx,
+		stdout:  newConsoleWriter(os.Stdout, writeMx),
+		stderr:  newConsoleWriter(os.Stderr, writeMx),
+		stdin:   os.Stdin,
+	}
+}
+
+func newConsoleWriter(out osFile, mx *sync.Mutex) *consoleWriter {
+	isDumbTerm := os.Getenv("TERM") == "dumb"
+	isTTY := !isDumbTerm && (isatty.IsTerminal(out.Fd()) || isatty.IsCygwinTerminal(out.Fd()))
+	return &consoleWriter{out, isTTY, mx, nil}
 }
 
 func (w *consoleWriter) Write(p []byte) (n int, err error) {
@@ -52,7 +82,7 @@ func (w *consoleWriter) Write(p []byte) (n int, err error) {
 	}
 
 	w.mutex.Lock()
-	n, err = w.writer.Write(p)
+	n, err = w.out.Write(p)
 	if w.persistentText != nil {
 		w.persistentText()
 	}
@@ -334,19 +364,21 @@ func showProgress(ctx context.Context, gs *globalState, pbs []*pb.ProgressBar, l
 	// TODO: make configurable?
 	updateFreq := 1 * time.Second
 	var stdoutFD int
-	if gs.stdOut.isTTY {
+	if gs.ui.stdOut.isTTY {
 		stdoutFD = int(gs.stdOut.rawOut.Fd())
 		updateFreq = 100 * time.Millisecond
-		gs.outMutex.Lock()
-		gs.stdOut.persistentText = printProgressBars
-		gs.stdErr.persistentText = printProgressBars
-		gs.outMutex.Unlock()
-		defer func() {
-			gs.outMutex.Lock()
-			gs.stdOut.persistentText = nil
-			gs.stdErr.persistentText = nil
-			gs.outMutex.Unlock()
-		}()
+		gs.ui.setPersistentText(printProgressBars)
+		defer gs.ui.setPersistentText(nil)
+		// gs.outMutex.Lock()
+		// gs.stdOut.persistentText = printProgressBars
+		// gs.stdErr.persistentText = printProgressBars
+		// gs.outMutex.Unlock()
+		// defer func() {
+		// 	gs.outMutex.Lock()
+		// 	gs.stdOut.persistentText = nil
+		// 	gs.stdErr.persistentText = nil
+		// 	gs.outMutex.Unlock()
+		// }()
 	}
 
 	var winch chan os.Signal
@@ -384,6 +416,7 @@ func showProgress(ctx context.Context, gs *globalState, pbs []*pb.ProgressBar, l
 			}
 		}
 		renderProgressBars(true)
+		gs.ui.Print()
 		gs.outMutex.Lock()
 		printProgressBars()
 		gs.outMutex.Unlock()

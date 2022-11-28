@@ -7,69 +7,23 @@ import (
 	"fmt"
 	"io/ioutil"
 	stdlog "log"
-	"path/filepath"
+	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"go.k6.io/k6/cmd/state"
 	"go.k6.io/k6/errext"
 	"go.k6.io/k6/lib/consts"
 	"go.k6.io/k6/log"
 )
 
-const (
-	defaultConfigFileName   = "config.json"
-	waitRemoteLoggerTimeout = time.Second * 5
-)
-
-// globalFlags contains global config values that apply for all k6 sub-commands.
-type globalFlags struct {
-	configFilePath string
-	quiet          bool
-	noColor        bool
-	address        string
-	logOutput      string
-	logFormat      string
-	verbose        bool
-}
-
-func getDefaultFlags(homeFolder string) globalFlags {
-	return globalFlags{
-		address:        "localhost:6565",
-		configFilePath: filepath.Join(homeFolder, "loadimpact", "k6", defaultConfigFileName),
-		logOutput:      "stderr",
-	}
-}
-
-func getFlags(defaultFlags globalFlags, env map[string]string) globalFlags {
-	result := defaultFlags
-
-	// TODO: add env vars for the rest of the values (after adjusting
-	// rootCmdPersistentFlagSet(), of course)
-
-	if val, ok := env["K6_CONFIG"]; ok {
-		result.configFilePath = val
-	}
-	if val, ok := env["K6_LOG_OUTPUT"]; ok {
-		result.logOutput = val
-	}
-	if val, ok := env["K6_LOG_FORMAT"]; ok {
-		result.logFormat = val
-	}
-	if env["K6_NO_COLOR"] != "" {
-		result.noColor = true
-	}
-	// Support https://no-color.org/, even an empty value should disable the
-	// color output from k6.
-	if _, ok := env["NO_COLOR"]; ok {
-		result.noColor = true
-	}
-	return result
-}
+const waitRemoteLoggerTimeout = time.Second * 5
 
 func parseEnvKeyValue(kv string) (string, string) {
 	if idx := strings.IndexRune(kv, '='); idx != -1 {
@@ -191,7 +145,12 @@ func (c *rootCommand) execute() {
 // Execute adds all child commands to the root command sets flags appropriately.
 // This is called by main.main(). It only needs to happen once to the rootCmd.
 func Execute() {
-	gs := newGlobalState(context.Background())
+	outMx := &sync.Mutex{}
+	gs := state.NewGlobalState(
+		context.Background(),
+		newConsoleWriter(os.Stdout, outMx),
+		newConsoleWriter(os.Stderr, outMx),
+	)
 
 	newRootCommand(gs).execute()
 }

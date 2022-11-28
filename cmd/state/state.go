@@ -1,17 +1,17 @@
-package cmd
+package state
 
 import (
 	"context"
 	"io"
 	"os"
 	"os/signal"
-	"sync"
+	"path/filepath"
 
-	"github.com/mattn/go-colorable"
-	"github.com/mattn/go-isatty"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/afero"
 )
+
+const defaultConfigFileName = "config.json"
 
 // GlobalState contains the GlobalFlags and accessors for most of the global
 // process-external state like CLI arguments, env vars, standard input, output
@@ -36,9 +36,10 @@ type GlobalState struct {
 
 	defaultFlags, flags globalFlags
 
-	outMutex       *sync.Mutex
-	stdOut, stdErr *consoleWriter
-	stdIn          io.Reader
+	console
+	// outMutex       *sync.Mutex
+	// stdOut, stdErr *consoleWriter
+	// stdIn          io.Reader
 
 	osExit       func(int)
 	signalNotify func(chan<- os.Signal, ...os.Signal)
@@ -53,14 +54,7 @@ type GlobalState struct {
 // global variables and functions from the os package. Anywhere else, things
 // like os.Stdout, os.Stderr, os.Stdin, os.Getenv(), etc. should be removed and
 // the respective properties of globalState used instead.
-func NewGlobalState(ctx context.Context) *GlobalState {
-	isDumbTerm := os.Getenv("TERM") == "dumb"
-	stdoutTTY := !isDumbTerm && (isatty.IsTerminal(os.Stdout.Fd()) || isatty.IsCygwinTerminal(os.Stdout.Fd()))
-	stderrTTY := !isDumbTerm && (isatty.IsTerminal(os.Stderr.Fd()) || isatty.IsCygwinTerminal(os.Stderr.Fd()))
-	outMutex := &sync.Mutex{}
-	stdOut := &consoleWriter{os.Stdout, colorable.NewColorable(os.Stdout), stdoutTTY, outMutex, nil}
-	stdErr := &consoleWriter{os.Stderr, colorable.NewColorable(os.Stderr), stderrTTY, outMutex, nil}
-
+func NewGlobalState(ctx context.Context, stdOut, stdErr io.Writer) *GlobalState {
 	envVars := buildEnvMap(os.Environ())
 	_, noColorsSet := envVars["NO_COLOR"] // even empty values disable colors
 	logger := &logrus.Logger{
@@ -104,4 +98,49 @@ func NewGlobalState(ctx context.Context) *GlobalState {
 			Level:     logrus.InfoLevel,
 		},
 	}
+}
+
+// globalFlags contains global config values that apply for all k6 sub-commands.
+type globalFlags struct {
+	configFilePath string
+	quiet          bool
+	noColor        bool
+	address        string
+	logOutput      string
+	logFormat      string
+	verbose        bool
+}
+
+func getDefaultFlags(homeFolder string) globalFlags {
+	return globalFlags{
+		address:        "localhost:6565",
+		configFilePath: filepath.Join(homeFolder, "loadimpact", "k6", defaultConfigFileName),
+		logOutput:      "stderr",
+	}
+}
+
+func getFlags(defaultFlags globalFlags, env map[string]string) globalFlags {
+	result := defaultFlags
+
+	// TODO: add env vars for the rest of the values (after adjusting
+	// rootCmdPersistentFlagSet(), of course)
+
+	if val, ok := env["K6_CONFIG"]; ok {
+		result.configFilePath = val
+	}
+	if val, ok := env["K6_LOG_OUTPUT"]; ok {
+		result.logOutput = val
+	}
+	if val, ok := env["K6_LOG_FORMAT"]; ok {
+		result.logFormat = val
+	}
+	if env["K6_NO_COLOR"] != "" {
+		result.noColor = true
+	}
+	// Support https://no-color.org/, even an empty value should disable the
+	// color output from k6.
+	if _, ok := env["NO_COLOR"]; ok {
+		result.noColor = true
+	}
+	return result
 }
