@@ -12,7 +12,7 @@ import (
 	"github.com/sirupsen/logrus"
 
 	"go.k6.io/k6/metrics"
-	"go.k6.io/k6/ui/pb"
+	"go.k6.io/k6/ui/console/progressbar"
 )
 
 // TODO: remove globals and use some type of explicit dependency injection?
@@ -104,7 +104,7 @@ type InitVUFunc func(context.Context, *logrus.Entry) (InitializedVU, error)
 // Executor is the interface all executors should implement
 type Executor interface {
 	GetConfig() ExecutorConfig
-	GetProgress() *pb.ProgressBar
+	GetProgress() *progressbar.ProgressBar
 	GetLogger() *logrus.Entry
 
 	Init(ctx context.Context) error

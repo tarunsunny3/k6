@@ -13,7 +13,7 @@ import (
 
 	"go.k6.io/k6/cloudapi"
 	"go.k6.io/k6/lib/consts"
-	"go.k6.io/k6/ui"
+	"go.k6.io/k6/ui/console/form"
 )
 
 //nolint:funlen,gocognit
@@ -72,13 +72,13 @@ This will set the default token used when just "k6 run -o cloud" is passed.`,
 			case token.Valid:
 				newCloudConf.Token = token
 			default:
-				form := ui.Form{
-					Fields: []ui.Field{
-						ui.StringField{
+				f := form.Form{
+					Fields: []form.Field{
+						form.StringField{
 							Key:   "Email",
 							Label: "Email",
 						},
-						ui.PasswordField{
+						form.PasswordField{
 							Key:   "Password",
 							Label: "Password",
 						},
@@ -88,7 +88,7 @@ This will set the default token used when just "k6 run -o cloud" is passed.`,
 					globalState.logger.Warn("Stdin is not a terminal, falling back to plain text input")
 				}
 				var vals map[string]string
-				vals, err = form.Run(globalState.stdIn, globalState.stdOut)
+				vals, err = f.Run(globalState.stdIn, globalState.stdOut)
 				if err != nil {
 					return err
 				}

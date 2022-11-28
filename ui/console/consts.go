@@ -8,5 +8,7 @@ const (
 		`   /          \   |  |\  \ |  (‾)  | \n` +
 		`  / __________ \  |__| \__\ \_____/ .io`
 
-	defaultTermWidth = 80
+	// DefaultTermWidth specifies the default width in characters of the
+	// terminal window.
+	DefaultTermWidth = 80
 )

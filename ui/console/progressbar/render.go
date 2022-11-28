@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/sirupsen/logrus"
-	"go.k6.io/k6/lib"
 	"go.k6.io/k6/ui/console"
 	"golang.org/x/term"
 )
@@ -25,21 +24,24 @@ func ShowProgress(ctx context.Context, cons *console.Console, pbs []*ProgressBar
 	var leftLen int64
 	for _, pb := range pbs {
 		l := pb.Left()
-		leftLen = lib.Max(int64(len(l)), leftLen)
+		leftLen = max(int64(len(l)), leftLen)
 	}
 	// Limit to maximum left text length
-	maxLeft := int(lib.Min(leftLen, maxLeftLength))
+	maxLeft := int(min(leftLen, maxLeftLength))
 
 	var progressBarsLastRenderLock sync.Mutex
 	var progressBarsLastRender []byte
 
 	printProgressBars := func() {
 		progressBarsLastRenderLock.Lock()
-		_, _ = gs.stdOut.writer.Write(progressBarsLastRender)
+		_, _ = cons.Stdout.Write(progressBarsLastRender)
 		progressBarsLastRenderLock.Unlock()
 	}
 
-	var widthDelta int
+	var (
+		termWidth  = cons.TermWidth()
+		widthDelta int
+	)
 	// Default to responsive progress bars when in an interactive terminal
 	renderProgressBars := func(goBack bool) {
 		barText, longestLine := renderMultipleBars(
@@ -52,8 +54,8 @@ func ShowProgress(ctx context.Context, cons *console.Console, pbs []*ProgressBar
 	}
 
 	// Otherwise fallback to fixed compact progress bars
-	if !gs.stdOut.isTTY {
-		widthDelta = -pb.DefaultWidth
+	if !cons.IsTTY {
+		widthDelta = -defaultWidth
 		renderProgressBars = func(goBack bool) {
 			barText, _ := renderMultipleBars(gs.flags.noColor, gs.stdOut.isTTY, goBack, maxLeft, termWidth, widthDelta, pbs)
 			progressBarsLastRenderLock.Lock()
@@ -65,8 +67,8 @@ func ShowProgress(ctx context.Context, cons *console.Console, pbs []*ProgressBar
 	// TODO: make configurable?
 	updateFreq := 1 * time.Second
 	var stdoutFD int
-	if gs.ui.stdOut.isTTY {
-		stdoutFD = int(gs.stdOut.rawOut.Fd())
+	if cons.IsTTY {
+		stdoutFD = int(cons.Stdout.Fd())
 		updateFreq = 100 * time.Millisecond
 		gs.ui.setPersistentText(printProgressBars)
 		defer gs.ui.setPersistentText(nil)

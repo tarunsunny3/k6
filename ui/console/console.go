@@ -13,15 +13,13 @@ import (
 	"golang.org/x/term"
 
 	"gopkg.in/yaml.v3"
-
-	"go.k6.io/k6/ui/console/progressbar"
 )
 
 // Console enables synced writing to stdout and stderr ...
 type Console struct {
 	IsTTY          bool
 	writeMx        *sync.Mutex
-	Stdout, Stderr io.Writer
+	Stdout, Stderr OSFile
 	Stdin          io.Reader
 	quiet          bool
 	theme          *theme
@@ -79,7 +77,7 @@ type theme struct {
 
 // A writer that syncs writes with a mutex and, if the output is a TTY, clears before newlines.
 type consoleWriter struct {
-	out   io.Writer
+	io.Writer
 	isTTY bool
 	mutex *sync.Mutex
 
@@ -87,12 +85,12 @@ type consoleWriter struct {
 	persistentText func()
 }
 
-type osFile interface {
+type OSFile interface {
 	io.Writer
 	Fd() uintptr
 }
 
-func newConsoleWriter(out osFile, mx *sync.Mutex) *consoleWriter {
+func newConsoleWriter(out OSFile, mx *sync.Mutex) *consoleWriter {
 	isDumbTerm := os.Getenv("TERM") == "dumb"
 	isTTY := !isDumbTerm && (isatty.IsTerminal(out.Fd()) || isatty.IsCygwinTerminal(out.Fd()))
 	return &consoleWriter{out, isTTY, mx, nil}
@@ -107,7 +105,7 @@ func (w *consoleWriter) Write(p []byte) (n int, err error) {
 	}
 
 	w.mutex.Lock()
-	n, err = w.out.Write(p)
+	n, err = w.Writer.Write(p)
 	if w.persistentText != nil {
 		w.persistentText()
 	}
@@ -159,33 +157,8 @@ func (c *Console) PrintBanner() {
 	}
 }
 
-func (c *Console) PrintBar(pb *progressbar.ProgressBar) {
-	end := "\n"
-	// TODO: refactor widthDelta away? make the progressbar rendering a bit more
-	// stateless... basically first render the left and right parts, so we know
-	// how long the longest line is, and how much space we have for the progress
-	widthDelta := -defaultTermWidth
-	if c.IsTTY {
-		// If we're in a TTY, instead of printing the bar and going to the next
-		// line, erase everything till the end of the line and return to the
-		// start, so that the next print will overwrite the same line.
-		//
-		// TODO: check for cross platform support
-		end = "\x1b[0K\r"
-		widthDelta = 0
-	}
-	rendered := pb.Render(0, widthDelta)
-	// Only output the left and middle part of the progress bar
-	c.Print(rendered.String() + end)
-}
-
-func (c *Console) ModifyAndPrintBar(bar *progressbar.ProgressBar, options ...progressbar.ProgressBarOption) {
-	bar.Modify(options...)
-	c.PrintBar(bar)
-}
-
 func (c *Console) TermWidth() int {
-	termWidth := defaultTermWidth
+	termWidth := DefaultTermWidth
 	if c.IsTTY {
 		tw, _, err := term.GetSize(int(os.Stdout.Fd()))
 		if !(tw > 0) || err != nil {
