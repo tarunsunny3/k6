@@ -26,7 +26,6 @@ import (
 	"go.k6.io/k6/lib"
 	"go.k6.io/k6/lib/consts"
 	"go.k6.io/k6/ui/console/progressbar"
-	"go.k6.io/k6/ui/pb"
 )
 
 // cmdRun handles the `k6 run` sub-command
@@ -78,23 +77,26 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	// This is manually triggered after the Engine's Run() has completed,
-	// and things like a single Ctrl+C don't affect it. We use it to make
-	// sure that the progressbars finish updating with the latest execution
-	// state one last time, after the test run has finished.
-	progressCtx, progressCancel := context.WithCancel(globalCtx)
-	defer progressCancel()
 	initBar := execScheduler.GetInitProgressBar()
-	progressBarWG := &sync.WaitGroup{}
-	progressBarWG.Add(1)
-	go func() {
-		pbs := []*progressbar.ProgressBar{execScheduler.GetInitProgressBar()}
-		for _, s := range execScheduler.GetExecutors() {
-			pbs = append(pbs, s.GetProgress())
-		}
-		showProgress(progressCtx, c.gs, pbs, logger)
-		progressBarWG.Done()
-	}()
+	if !c.gs.Console.quiet {
+		// This is manually triggered after the Engine's Run() has completed,
+		// and things like a single Ctrl+C don't affect it. We use it to make
+		// sure that the progressbars finish updating with the latest execution
+		// state one last time, after the test run has finished.
+		progressCtx, progressCancel := context.WithCancel(globalCtx)
+		defer progressCancel()
+		progressBarWG := &sync.WaitGroup{}
+		progressBarWG.Add(1)
+		go func() {
+			pbs := []*progressbar.ProgressBar{execScheduler.GetInitProgressBar()}
+			for _, s := range execScheduler.GetExecutors() {
+				pbs = append(pbs, s.GetProgress())
+			}
+			progressbar.GetProgress(progressCtx)
+			showProgress(progressCtx, c.gs, pbs, logger)
+			progressBarWG.Done()
+		}()
+	}
 
 	// Create all outputs.
 	executionPlan := execScheduler.GetExecutionPlan()
@@ -108,7 +110,7 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 
 	// TODO: remove this completely
 	// Create the engine.
-	initBar.Modify(pb.WithConstProgress(0, "Init engine"))
+	initBar.Modify(progressbar.WithConstProgress(0, "Init engine"))
 	engine, err := core.NewEngine(testRunState, execScheduler, outputs)
 	if err != nil {
 		return err
@@ -116,7 +118,7 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 
 	// Spin up the REST API server, if not disabled.
 	if c.gs.flags.address != "" {
-		initBar.Modify(pb.WithConstProgress(0, "Init API server"))
+		initBar.Modify(progressbar.WithConstProgress(0, "Init API server"))
 		go func() {
 			logger.Debugf("Starting the REST API server on %s", c.gs.flags.address)
 			// TODO: send the ExecutionState and MetricsEngine instead of the Engine
@@ -133,7 +135,7 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 	}
 
 	// We do this here so we can get any output URLs below.
-	initBar.Modify(pb.WithConstProgress(0, "Starting outputs"))
+	initBar.Modify(progressbar.WithConstProgress(0, "Starting outputs"))
 	// TODO: directly create the MutputManager here, not in the Engine
 	err = engine.OutputManager.StartOutputs()
 	if err != nil {
@@ -164,7 +166,7 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 	defer stopSignalHandling()
 
 	// Initialize the engine
-	initBar.Modify(pb.WithConstProgress(0, "Init VUs..."))
+	initBar.Modify(progressbar.WithConstProgress(0, "Init VUs..."))
 	engineRun, engineWait, err := engine.Init(globalCtx, runCtx)
 	if err != nil {
 		err = common.UnwrapGojaInterruptedError(err)
@@ -190,7 +192,7 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 	}
 
 	// Start the test run
-	initBar.Modify(pb.WithConstProgress(0, "Starting test..."))
+	initBar.Modify(progressbar.WithConstProgress(0, "Starting test..."))
 	var interrupt error
 	err = engineRun()
 	if err != nil {
