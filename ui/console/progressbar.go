@@ -3,7 +3,6 @@ package console
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"strings"
 	"sync"
@@ -58,14 +57,10 @@ func (c *Console) ShowProgress(ctx context.Context, pbs []*pb.ProgressBar) {
 	var progressBarsLastRenderLock sync.Mutex
 	var progressBarsLastRender []byte
 
-	var rawStdout io.Writer
-	if cw, ok := c.Stdout.(*consoleWriter); ok {
-		rawStdout = cw.OSFile
-	}
-
 	printProgressBars := func() {
 		progressBarsLastRenderLock.Lock()
-		_, _ = rawStdout.Write(progressBarsLastRender)
+		// Must use the raw stdout, to avoid deadlock acquiring lock on c.outMx.
+		_, _ = c.rawStdout.Write(progressBarsLastRender)
 		progressBarsLastRenderLock.Unlock()
 	}
 

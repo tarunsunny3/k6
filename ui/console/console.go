@@ -22,6 +22,8 @@ type Console struct {
 	outMx          *sync.Mutex
 	Stdout, Stderr OSFile
 	Stdin          io.Reader
+	rawStdout      io.Writer
+	stdout, stderr *consoleWriter
 	theme          *theme
 	signalNotify   func(chan<- os.Signal, ...os.Signal)
 	signalStop     func(chan<- os.Signal)
@@ -68,6 +70,9 @@ func New(
 		Stdout:       stdout,
 		Stderr:       stderr,
 		Stdin:        os.Stdin,
+		rawStdout:    os.Stdout,
+		stdout:       stdout,
+		stderr:       stderr,
 		theme:        th,
 		signalNotify: signalNotify,
 		signalStop:   signalStop,
@@ -141,14 +146,8 @@ func (c *Console) setPersistentText(pt func()) {
 	c.outMx.Lock()
 	defer c.outMx.Unlock()
 
-	out := []OSFile{c.Stdout, c.Stderr}
-	for _, o := range out {
-		cw, ok := o.(*consoleWriter)
-		if !ok {
-			panic(fmt.Sprintf("expected *consoleWriter; got %T", c.Stdout))
-		}
-		cw.persistentText = pt
-	}
+	c.stdout.persistentText = pt
+	c.stderr.persistentText = pt
 }
 
 // OSFile is a subset of the functionality implemented by os.File.
