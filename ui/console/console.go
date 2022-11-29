@@ -148,8 +148,8 @@ func (c *Console) ApplyTheme(s string) string {
 	return s
 }
 
-func (c *Console) Print(s string) {
-	if _, err := fmt.Fprint(c.Stdout, s); err != nil {
+func (c *Console) Printf(s string, a ...interface{}) {
+	if _, err := fmt.Fprintf(c.Stdout, s, a...); err != nil {
 		c.logger.Errorf("could not print '%s' to stdout: %s", s, err.Error())
 	}
 }
@@ -159,6 +159,15 @@ func (c *Console) PrintBanner() {
 	if err != nil {
 		c.logger.Warnf("could not print k6 banner message to stdout: %s", err.Error())
 	}
+}
+
+func (c *Console) PrintYAML(v interface{}) error {
+	data, err := yaml.Marshal(v)
+	if err != nil {
+		return fmt.Errorf("could not marshal YAML: %w", err)
+	}
+	c.Printf(string(data))
+	return nil
 }
 
 func (c *Console) TermWidth() (int, error) {
@@ -190,16 +199,4 @@ func (c *Console) setPersistentText(pt func()) {
 		}
 		cw.persistentText = pt
 	}
-}
-
-func yamlPrint(w io.Writer, v interface{}) error {
-	data, err := yaml.Marshal(v)
-	if err != nil {
-		return fmt.Errorf("could not marshal YAML: %w", err)
-	}
-	_, err = fmt.Fprint(w, string(data))
-	if err != nil {
-		return fmt.Errorf("could flush the data to the output: %w", err)
-	}
-	return nil
 }

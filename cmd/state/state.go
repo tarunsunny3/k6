@@ -28,17 +28,17 @@ const defaultConfigFileName = "config.json"
 // parameters, while `newGlobalTestState()` can be used in tests to create
 // simulated environments.
 type GlobalState struct {
-	ctx                 context.Context
-	fs                  afero.Fs
-	getWD               func() (string, error)
-	cmdArgs             []string
-	env                 map[string]string
-	defaultFlags, flags globalFlags
-	console             *console.Console
-	osExit              func(int)
-	signalNotify        func(chan<- os.Signal, ...os.Signal)
-	signalStop          func(chan<- os.Signal)
-	logger              *logrus.Logger
+	Ctx                 context.Context
+	FS                  afero.Fs
+	Getwd               func() (string, error)
+	CmdArgs             []string
+	Env                 map[string]string
+	DefaultFlags, Flags GlobalFlags
+	Console             *console.Console
+	OSExit              func(int)
+	SignalNotify        func(chan<- os.Signal, ...os.Signal)
+	SignalStop          func(chan<- os.Signal)
+	Logger              *logrus.Logger
 }
 
 // NewGlobalState returns a new GlobalState with the given ctx.
@@ -63,68 +63,71 @@ func NewGlobalState(ctx context.Context, cmdArgs []string, env map[string]string
 	signalNotify := signal.Notify
 	signalStop := signal.Stop
 
-	_, noColorsSet := env["NO_COLOR"] // even empty values disable colors
-	colorizeOutput := !noColorsSet || env["K6_NO_COLOR"] == ""
-	cons := console.New(flags.quiet, colorizeOutput, env["TERM"], signalNotify, signalStop)
+	cons := console.New(flags.Quiet, !flags.NoColor, env["TERM"], signalNotify, signalStop)
 	logger = cons.Logger()
 
 	return &GlobalState{
-		ctx:          ctx,
-		fs:           afero.NewOsFs(),
-		getWD:        os.Getwd,
-		cmdArgs:      cmdArgs,
-		env:          env,
-		defaultFlags: defaultFlags,
-		flags:        flags,
-		console:      cons,
-		osExit:       os.Exit,
-		signalNotify: signal.Notify,
-		signalStop:   signal.Stop,
-		logger:       logger,
+		Ctx:          ctx,
+		FS:           afero.NewOsFs(),
+		Getwd:        os.Getwd,
+		CmdArgs:      cmdArgs,
+		Env:          env,
+		DefaultFlags: defaultFlags,
+		Flags:        flags,
+		Console:      cons,
+		OSExit:       os.Exit,
+		SignalNotify: signal.Notify,
+		SignalStop:   signal.Stop,
+		Logger:       logger,
 	}
 }
 
-// globalFlags contains global config values that apply for all k6 sub-commands.
-type globalFlags struct {
-	configFilePath string
-	quiet          bool
-	noColor        bool
-	address        string
-	logOutput      string
-	logFormat      string
-	verbose        bool
+// // Logger returns the global logger.
+// func (gs *GlobalState) Logger() *logrus.Logger {
+// 	return gs.logger
+// }
+
+// GlobalFlags contains global config values that apply for all k6 sub-commands.
+type GlobalFlags struct {
+	ConfigFilePath string
+	Quiet          bool
+	NoColor        bool
+	Address        string
+	LogOutput      string
+	LogFormat      string
+	Verbose        bool
 }
 
-func getDefaultFlags(homeDir string) globalFlags {
-	return globalFlags{
-		address:        "localhost:6565",
-		configFilePath: filepath.Join(homeDir, "loadimpact", "k6", defaultConfigFileName),
-		logOutput:      "stderr",
+func getDefaultFlags(homeDir string) GlobalFlags {
+	return GlobalFlags{
+		Address:        "localhost:6565",
+		ConfigFilePath: filepath.Join(homeDir, "loadimpact", "k6", defaultConfigFileName),
+		LogOutput:      "stderr",
 	}
 }
 
-func getFlags(defaultFlags globalFlags, env map[string]string) globalFlags {
+func getFlags(defaultFlags GlobalFlags, env map[string]string) GlobalFlags {
 	result := defaultFlags
 
 	// TODO: add env vars for the rest of the values (after adjusting
 	// rootCmdPersistentFlagSet(), of course)
 
 	if val, ok := env["K6_CONFIG"]; ok {
-		result.configFilePath = val
+		result.ConfigFilePath = val
 	}
 	if val, ok := env["K6_LOG_OUTPUT"]; ok {
-		result.logOutput = val
+		result.LogOutput = val
 	}
 	if val, ok := env["K6_LOG_FORMAT"]; ok {
-		result.logFormat = val
+		result.LogFormat = val
 	}
 	if env["K6_NO_COLOR"] != "" {
-		result.noColor = true
+		result.NoColor = true
 	}
 	// Support https://no-color.org/, even an empty value should disable the
 	// color output from k6.
 	if _, ok := env["NO_COLOR"]; ok {
-		result.noColor = true
+		result.NoColor = true
 	}
 	return result
 }

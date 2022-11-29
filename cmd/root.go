@@ -41,14 +41,14 @@ func buildEnvMap(environ []string) map[string]string {
 
 // This is to keep all fields needed for the main/root k6 command
 type rootCommand struct {
-	globalState *globalState
+	globalState *state.GlobalState
 
 	cmd            *cobra.Command
 	loggerStopped  <-chan struct{}
 	loggerIsRemote bool
 }
 
-func newRootCommand(gs *globalState) *rootCommand {
+func newRootCommand(gs *state.GlobalState) *rootCommand {
 	c := &rootCommand{
 		globalState: gs,
 	}
@@ -56,7 +56,7 @@ func newRootCommand(gs *globalState) *rootCommand {
 	rootCmd := &cobra.Command{
 		Use:               "k6",
 		Short:             "a next-generation load generator",
-		Long:              "\n" + getBanner(c.globalState.flags.noColor || !c.globalState.stdOut.isTTY),
+		Long:              "\n" + getBanner(c.globalState.Flags.noColor || !c.globalState.stdOut.isTTY),
 		SilenceUsage:      true,
 		SilenceErrors:     true,
 		PersistentPreRunE: c.persistentPreRunE,
@@ -68,7 +68,7 @@ func newRootCommand(gs *globalState) *rootCommand {
 	rootCmd.SetErr(gs.stdErr) // TODO: use gs.logger.WriterLevel(logrus.ErrorLevel)?
 	rootCmd.SetIn(gs.stdIn)
 
-	subCommands := []func(*globalState) *cobra.Command{
+	subCommands := []func(*state.GlobalState) *cobra.Command{
 		getCmdArchive, getCmdCloud, getCmdConvert, getCmdInspect,
 		getCmdLogin, getCmdPause, getCmdResume, getCmdScale, getCmdRun,
 		getCmdStats, getCmdStatus, getCmdVersion,
@@ -95,8 +95,8 @@ func (c *rootCommand) persistentPreRunE(cmd *cobra.Command, args []string) error
 		c.loggerIsRemote = true
 	}
 
-	stdlog.SetOutput(c.globalState.logger.Writer())
-	c.globalState.logger.Debugf("k6 version: v%s", consts.FullVersion())
+	stdlog.SetOutput(c.globalState.Logger.Writer())
+	c.globalState.Logger.Debugf("k6 version: v%s", consts.FullVersion())
 	return nil
 }
 
@@ -130,7 +130,7 @@ func (c *rootCommand) execute() {
 		fields["hint"] = herr.Hint()
 	}
 
-	c.globalState.logger.WithFields(fields).Error(errText)
+	c.globalState.Logger.WithFields(fields).Error(errText)
 	if c.loggerIsRemote {
 		c.globalState.fallbackLogger.WithFields(fields).Error(errText)
 		cancel()
@@ -153,49 +153,49 @@ func (c *rootCommand) waitRemoteLogger() {
 		select {
 		case <-c.loggerStopped:
 		case <-time.After(waitRemoteLoggerTimeout):
-			c.globalState.fallbackLogger.Errorf("Remote logger didn't stop in %s", waitRemoteLoggerTimeout)
+			c.globalState.Logger.Errorf("Remote logger didn't stop in %s", waitRemoteLoggerTimeout)
 		}
 	}
 }
 
-func rootCmdPersistentFlagSet(gs *globalState) *pflag.FlagSet {
+func rootCmdPersistentFlagSet(gs *state.GlobalState) *pflag.FlagSet {
 	flags := pflag.NewFlagSet("", pflag.ContinueOnError)
 	// TODO: refactor this config, the default value management with pflag is
 	// simply terrible... :/
 	//
-	// We need to use `gs.flags.<value>` both as the destination and as
+	// We need to use `gs.Flags.<value>` both as the destination and as
 	// the value here, since the config values could have already been set by
 	// their respective environment variables. However, we then also have to
 	// explicitly set the DefValue to the respective default value from
-	// `gs.defaultFlags.<value>`, so that the `k6 --help` message is
+	// `gs.DefaultFlags.<value>`, so that the `k6 --help` message is
 	// not messed up...
 
-	flags.StringVar(&gs.flags.logOutput, "log-output", gs.flags.logOutput,
+	flags.StringVar(&gs.Flags.LogOutput, "log-output", gs.Flags.LogOutput,
 		"change the output for k6 logs, possible values are stderr,stdout,none,loki[=host:port],file[=./path.fileformat]")
-	flags.Lookup("log-output").DefValue = gs.defaultFlags.logOutput
+	flags.Lookup("log-output").DefValue = gs.DefaultFlags.logOutput
 
-	flags.StringVar(&gs.flags.logFormat, "logformat", gs.flags.logFormat, "log output format")
+	flags.StringVar(&gs.Flags.logFormat, "logformat", gs.Flags.logFormat, "log output format")
 	oldLogFormat := flags.Lookup("logformat")
 	oldLogFormat.Hidden = true
 	oldLogFormat.Deprecated = "log-format"
-	oldLogFormat.DefValue = gs.defaultFlags.logFormat
-	flags.StringVar(&gs.flags.logFormat, "log-format", gs.flags.logFormat, "log output format")
-	flags.Lookup("log-format").DefValue = gs.defaultFlags.logFormat
+	oldLogFormat.DefValue = gs.DefaultFlags.LogFormat
+	flags.StringVar(&gs.Flags.LogFormat, "log-format", gs.Flags.LogFormat, "log output format")
+	flags.Lookup("log-format").DefValue = gs.DefaultFlags.LogFormat
 
-	flags.StringVarP(&gs.flags.configFilePath, "config", "c", gs.flags.configFilePath, "JSON config file")
+	flags.StringVarP(&gs.Flags.ConfigFilePath, "config", "c", gs.Flags.ConfigFilePath, "JSON config file")
 	// And we also need to explicitly set the default value for the usage message here, so things
 	// like `K6_CONFIG="blah" k6 run -h` don't produce a weird usage message
-	flags.Lookup("config").DefValue = gs.defaultFlags.configFilePath
+	flags.Lookup("config").DefValue = gs.DefaultFlags.ConfigFilePath
 	must(cobra.MarkFlagFilename(flags, "config"))
 
-	flags.BoolVar(&gs.flags.noColor, "no-color", gs.flags.noColor, "disable colored output")
-	flags.Lookup("no-color").DefValue = strconv.FormatBool(gs.defaultFlags.noColor)
+	flags.BoolVar(&gs.Flags.NoColor, "no-color", gs.Flags.NoColor, "disable colored output")
+	flags.Lookup("no-color").DefValue = strconv.FormatBool(gs.DefaultFlags.NoColor)
 
 	// TODO: support configuring these through environment variables as well?
 	// either with croconf or through the hack above...
-	flags.BoolVarP(&gs.flags.verbose, "verbose", "v", gs.defaultFlags.verbose, "enable verbose logging")
-	flags.BoolVarP(&gs.flags.quiet, "quiet", "q", gs.defaultFlags.quiet, "disable progress updates")
-	flags.StringVarP(&gs.flags.address, "address", "a", gs.defaultFlags.address, "address for the REST API server")
+	flags.BoolVarP(&gs.Flags.Verbose, "verbose", "v", gs.DefaultFlags.Verbose, "enable verbose logging")
+	flags.BoolVarP(&gs.Flags.Quiet, "quiet", "q", gs.DefaultFlags.Quiet, "disable progress updates")
+	flags.StringVarP(&gs.Flags.Address, "address", "a", gs.DefaultFlags.Address, "address for the REST API server")
 
 	return flags
 }
@@ -215,61 +215,54 @@ func (c *rootCommand) setupLoggers() (<-chan struct{}, error) {
 	ch := make(chan struct{})
 	close(ch)
 
-	if c.globalState.flags.verbose {
-		c.globalState.logger.SetLevel(logrus.DebugLevel)
+	if c.globalState.Flags.Verbose {
+		c.globalState.Logger.SetLevel(logrus.DebugLevel)
 	}
 
-	// TODO: Get rid of the color checks
-	loggerForceColors := false // disable color by default
-	switch line := c.globalState.flags.logOutput; {
+	switch line := c.globalState.Flags.LogOutput; {
 	case line == "stderr":
-		loggerForceColors = !c.globalState.flags.noColor && c.globalState.stdErr.isTTY
-		c.globalState.logger.SetOutput(c.globalState.stdErr)
+		c.globalState.Logger.SetOutput(c.globalState.Console.Stderr)
 	case line == "stdout":
-		loggerForceColors = !c.globalState.flags.noColor && c.globalState.stdOut.isTTY
-		c.globalState.logger.SetOutput(c.globalState.stdOut)
+		c.globalState.Logger.SetOutput(c.globalState.Console.Stdout)
 	case line == "none":
-		c.globalState.logger.SetOutput(ioutil.Discard)
+		c.globalState.Logger.SetOutput(ioutil.Discard)
 
 	case strings.HasPrefix(line, "loki"):
 		ch = make(chan struct{}) // TODO: refactor, get it from the constructor
-		hook, err := log.LokiFromConfigLine(c.globalState.ctx, c.globalState.fallbackLogger, line, ch)
+		hook, err := log.LokiFromConfigLine(c.globalState.Ctx, c.globalState.Logger, line, ch)
 		if err != nil {
 			return nil, err
 		}
-		c.globalState.logger.AddHook(hook)
-		c.globalState.logger.SetOutput(ioutil.Discard) // don't output to anywhere else
-		c.globalState.flags.logFormat = "raw"
+		c.globalState.Logger.AddHook(hook)
+		c.globalState.Logger.SetOutput(ioutil.Discard) // don't output to anywhere else
+		c.globalState.Flags.LogFormat = "raw"
 
 	case strings.HasPrefix(line, "file"):
 		ch = make(chan struct{}) // TODO: refactor, get it from the constructor
 		hook, err := log.FileHookFromConfigLine(
-			c.globalState.ctx, c.globalState.fs, c.globalState.getwd,
-			c.globalState.fallbackLogger, line, ch,
+			c.globalState.Ctx, c.globalState.FS, c.globalState.Getwd,
+			c.globalState.Logger, line, ch,
 		)
 		if err != nil {
 			return nil, err
 		}
 
-		c.globalState.logger.AddHook(hook)
-		c.globalState.logger.SetOutput(ioutil.Discard)
+		c.globalState.Logger.AddHook(hook)
+		c.globalState.Logger.SetOutput(ioutil.Discard)
 
 	default:
 		return nil, fmt.Errorf("unsupported log output '%s'", line)
 	}
 
-	switch c.globalState.flags.logFormat {
+	switch c.globalState.Flags.LogFormat {
 	case "raw":
-		c.globalState.logger.SetFormatter(&RawFormatter{})
-		c.globalState.logger.Debug("Logger format: RAW")
+		c.globalState.Logger.SetFormatter(&RawFormatter{})
+		c.globalState.Logger.Debug("Logger format: RAW")
 	case "json":
-		c.globalState.logger.SetFormatter(&logrus.JSONFormatter{})
-		c.globalState.logger.Debug("Logger format: JSON")
+		c.globalState.Logger.SetFormatter(&logrus.JSONFormatter{})
+		c.globalState.Logger.Debug("Logger format: JSON")
 	default:
-		c.globalState.logger.SetFormatter(&logrus.TextFormatter{
-			ForceColors: loggerForceColors, DisableColors: c.globalState.flags.noColor,
-		})
-		c.globalState.logger.Debug("Logger format: TEXT")
+		c.globalState.Logger.Debug("Logger format: TEXT")
 	}
 	return ch, nil
 }

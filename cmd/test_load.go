@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"go.k6.io/k6/cmd/state"
 	"go.k6.io/k6/errext"
 	"go.k6.io/k6/errext/exitcodes"
 	"go.k6.io/k6/js"
@@ -40,7 +41,7 @@ type loadedTest struct {
 	keyLogger      io.Closer
 }
 
-func loadTest(gs *globalState, cmd *cobra.Command, args []string) (*loadedTest, error) {
+func loadTest(gs *state.GlobalState, cmd *cobra.Command, args []string) (*loadedTest, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("k6 needs at least one argument to load the test")
 	}
@@ -88,7 +89,7 @@ func loadTest(gs *globalState, cmd *cobra.Command, args []string) (*loadedTest, 
 	return test, nil
 }
 
-func (lt *loadedTest) initializeFirstRunner(gs *globalState) error {
+func (lt *loadedTest) initializeFirstRunner(gs *state.GlobalState) error {
 	testPath := lt.source.URL.String()
 	logger := gs.logger.WithField("test_path", testPath)
 
@@ -154,7 +155,7 @@ func (lt *loadedTest) initializeFirstRunner(gs *globalState) error {
 
 // readSource is a small wrapper around loader.ReadSource returning
 // result of the load and filesystems map
-func readSource(globalState *globalState, filename string) (*loader.SourceData, map[string]afero.Fs, string, error) {
+func readSource(globalState *state.GlobalState, filename string) (*loader.SourceData, map[string]afero.Fs, string, error) {
 	pwd, err := globalState.getwd()
 	if err != nil {
 		return nil, nil, "", err
@@ -173,7 +174,7 @@ func detectTestType(data []byte) string {
 }
 
 func (lt *loadedTest) consolidateDeriveAndValidateConfig(
-	gs *globalState, cmd *cobra.Command,
+	gs *state.GlobalState, cmd *cobra.Command,
 	cliConfGetter func(flags *pflag.FlagSet) (Config, error), // TODO: obviate
 ) (*loadedAndConfiguredTest, error) {
 	var cliConfig Config
@@ -231,7 +232,7 @@ type loadedAndConfiguredTest struct {
 }
 
 func loadAndConfigureTest(
-	gs *globalState, cmd *cobra.Command, args []string,
+	gs *state.GlobalState, cmd *cobra.Command, args []string,
 	cliConfigGetter func(flags *pflag.FlagSet) (Config, error),
 ) (*loadedAndConfiguredTest, error) {
 	test, err := loadTest(gs, cmd, args)

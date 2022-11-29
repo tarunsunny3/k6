@@ -9,12 +9,13 @@ import (
 	"golang.org/x/term"
 	"gopkg.in/guregu/null.v3"
 
+	"go.k6.io/k6/cmd/state"
 	"go.k6.io/k6/output/influxdb"
 	"go.k6.io/k6/ui/console/form"
 )
 
 //nolint:funlen
-func getCmdLoginInfluxDB(globalState *globalState) *cobra.Command {
+func getCmdLoginInfluxDB(globalState *state.GlobalState) *cobra.Command {
 	// loginInfluxDBCommand represents the 'login influxdb' command
 	loginInfluxDBCommand := &cobra.Command{
 		Use:   "influxdb [uri]",

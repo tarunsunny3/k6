@@ -18,6 +18,7 @@ import (
 	"github.com/spf13/pflag"
 
 	"go.k6.io/k6/api"
+	"go.k6.io/k6/cmd/state"
 	"go.k6.io/k6/core"
 	"go.k6.io/k6/core/local"
 	"go.k6.io/k6/errext"
@@ -30,7 +31,7 @@ import (
 
 // cmdRun handles the `k6 run` sub-command
 type cmdRun struct {
-	gs *globalState
+	gs *state.GlobalState
 }
 
 // TODO: split apart some more
@@ -92,8 +93,7 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 			for _, s := range execScheduler.GetExecutors() {
 				pbs = append(pbs, s.GetProgress())
 			}
-			pb.GetProgress(progressCtx)
-			showProgress(progressCtx, c.gs, pbs, logger)
+			c.gs.Console.ShowProgress(progressCtx, pbs)
 			progressBarWG.Done()
 		}()
 	}
@@ -147,10 +147,10 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 		c.gs.Console.ApplyTheme, "local", args[0], "", conf,
 		execScheduler.GetState().ExecutionTuple, executionPlan, outputs,
 	)
-	if c.gs.flags.quiet {
-		c.gs.logger.Debug(execDesc)
+	if c.gs.Flags.Quiet {
+		c.gs.Logger.Debug(execDesc)
 	} else {
-		c.gs.Console.Print(execDesc)
+		c.gs.Console.Printf(execDesc)
 	}
 
 	// Trap Interrupts, SIGINTs and SIGTERMs.
@@ -280,7 +280,7 @@ func (c *cmdRun) flagSet() *pflag.FlagSet {
 	return flags
 }
 
-func getCmdRun(gs *globalState) *cobra.Command {
+func getCmdRun(gs *state.GlobalState) *cobra.Command {
 	c := &cmdRun{
 		gs: gs,
 	}
