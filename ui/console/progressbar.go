@@ -3,6 +3,7 @@ package console
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"sync"
@@ -57,9 +58,14 @@ func (c *Console) ShowProgress(ctx context.Context, pbs []*pb.ProgressBar) {
 	var progressBarsLastRenderLock sync.Mutex
 	var progressBarsLastRender []byte
 
+	var rawStdout io.Writer
+	if cw, ok := c.Stdout.(*consoleWriter); ok {
+		rawStdout = cw.OSFile
+	}
+
 	printProgressBars := func() {
 		progressBarsLastRenderLock.Lock()
-		_, _ = c.Stdout.Write(progressBarsLastRender)
+		_, _ = rawStdout.Write(progressBarsLastRender)
 		progressBarsLastRenderLock.Unlock()
 	}
 
