@@ -140,8 +140,8 @@ func getExecutionDescription(
 	fmt.Fprintf(buf, "  scenarios: %s\n", applyTheme(fmt.Sprintf(
 		"(%.2f%%) %s, %d max VUs, %s max duration (incl. graceful stop):",
 		conf.ExecutionSegment.FloatLength()*100, scenarioDesc,
-		lib.GetMaxPossibleVUs(execPlan), maxDuration.Round(100*time.Millisecond))),
-	)
+		lib.GetMaxPossibleVUs(execPlan), maxDuration.Round(100*time.Millisecond)),
+	))
 	for _, ec := range executorConfigs {
 		fmt.Fprintf(buf, "           * %s: %s\n",
 			ec.GetName(), ec.GetDescription(et))

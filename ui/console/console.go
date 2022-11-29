@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 	"sync"
 
 	"github.com/fatih/color"
@@ -74,69 +75,20 @@ func New(
 	}
 }
 
+func (c *Console) Banner() string {
+	banner := strings.Join([]string{
+		`          /\      |‾‾| /‾‾/   /‾‾/   `,
+		`     /\  /  \     |  |/  /   /  /    `,
+		`    /  \/    \    |     (   /   ‾‾\  `,
+		`   /          \   |  |\  \ |  (‾)  | `,
+		`  / __________ \  |__| \__\ \_____/ .io`,
+	}, "\n")
+
+	return c.ApplyTheme(banner)
+}
+
 func (c *Console) Logger() *logrus.Logger {
 	return c.logger
-}
-
-type theme struct {
-	foreground *color.Color
-}
-
-// A writer that syncs writes with a mutex and, if the output is a TTY, clears before newlines.
-type consoleWriter struct {
-	OSFile
-	isTTY bool
-	mutex *sync.Mutex
-
-	// Used for flicker-free persistent objects like the progressbars
-	persistentText func()
-}
-
-// OSFile is a subset of the functionality implemented by os.File.
-type OSFile interface {
-	io.Writer
-	Fd() uintptr
-}
-
-func newConsoleWriter(out OSFile, mx *sync.Mutex, termType string) *consoleWriter {
-	isTTY := termType == "dumb" && (isatty.IsTerminal(out.Fd()) || isatty.IsCygwinTerminal(out.Fd()))
-	return &consoleWriter{out, isTTY, mx, nil}
-}
-
-func (w *consoleWriter) Write(p []byte) (n int, err error) {
-	origLen := len(p)
-	if w.isTTY {
-		// Add a TTY code to erase till the end of line with each new line
-		// TODO: check how cross-platform this is...
-		p = bytes.ReplaceAll(p, []byte{'\n'}, []byte{'\x1b', '[', '0', 'K', '\n'})
-	}
-
-	w.mutex.Lock()
-	n, err = w.OSFile.Write(p)
-	if w.persistentText != nil {
-		w.persistentText()
-	}
-	w.mutex.Unlock()
-
-	if err != nil && n < origLen {
-		return n, err
-	}
-	return origLen, err
-}
-
-// getColor returns the requested color, or an uncolored object, depending on
-// the value of noColor. The explicit EnableColor() and DisableColor() are
-// needed because the library checks os.Stdout itself otherwise...
-func getColor(attributes ...color.Attribute) *color.Color {
-	// if noColor {
-	// 	c := color.New()
-	// 	c.DisableColor()
-	// 	return c
-	// }
-
-	c := color.New(attributes...)
-	c.EnableColor()
-	return c
 }
 
 func (c *Console) ApplyTheme(s string) string {
@@ -147,16 +99,15 @@ func (c *Console) ApplyTheme(s string) string {
 	return s
 }
 
-func (c *Console) Printf(s string, a ...interface{}) {
-	if _, err := fmt.Fprintf(c.Stdout, s, a...); err != nil {
+func (c *Console) Print(s string) {
+	if _, err := fmt.Fprint(c.Stdout, s); err != nil {
 		c.logger.Errorf("could not print '%s' to stdout: %s", s, err.Error())
 	}
 }
 
-func (c *Console) PrintBanner() {
-	_, err := fmt.Fprintf(c.Stdout, "\n%s\n\n", c.ApplyTheme(Banner))
-	if err != nil {
-		c.logger.Warnf("could not print k6 banner message to stdout: %s", err.Error())
+func (c *Console) Printf(s string, a ...interface{}) {
+	if _, err := fmt.Fprintf(c.Stdout, s, a...); err != nil {
+		c.logger.Errorf("could not print '%s' to stdout: %s", s, err.Error())
 	}
 }
 
@@ -198,4 +149,65 @@ func (c *Console) setPersistentText(pt func()) {
 		}
 		cw.persistentText = pt
 	}
+}
+
+// OSFile is a subset of the functionality implemented by os.File.
+type OSFile interface {
+	io.Writer
+	Fd() uintptr
+}
+
+type theme struct {
+	foreground *color.Color
+}
+
+// A writer that syncs writes with a mutex and, if the output is a TTY, clears before newlines.
+type consoleWriter struct {
+	OSFile
+	isTTY bool
+	mutex *sync.Mutex
+
+	// Used for flicker-free persistent objects like the progressbars
+	persistentText func()
+}
+
+func newConsoleWriter(out OSFile, mx *sync.Mutex, termType string) *consoleWriter {
+	isTTY := termType != "dumb" && (isatty.IsTerminal(out.Fd()) || isatty.IsCygwinTerminal(out.Fd()))
+	return &consoleWriter{out, isTTY, mx, nil}
+}
+
+func (w *consoleWriter) Write(p []byte) (n int, err error) {
+	origLen := len(p)
+	if w.isTTY {
+		// Add a TTY code to erase till the end of line with each new line
+		// TODO: check how cross-platform this is...
+		p = bytes.ReplaceAll(p, []byte{'\n'}, []byte{'\x1b', '[', '0', 'K', '\n'})
+	}
+
+	w.mutex.Lock()
+	n, err = w.OSFile.Write(p)
+	if w.persistentText != nil {
+		w.persistentText()
+	}
+	w.mutex.Unlock()
+
+	if err != nil && n < origLen {
+		return n, err
+	}
+	return origLen, err
+}
+
+// getColor returns the requested color, or an uncolored object, depending on
+// the value of noColor. The explicit EnableColor() and DisableColor() are
+// needed because the library checks os.Stdout itself otherwise...
+func getColor(attributes ...color.Attribute) *color.Color {
+	// if noColor {
+	// 	c := color.New()
+	// 	c.DisableColor()
+	// 	return c
+	// }
+
+	c := color.New(attributes...)
+	c.EnableColor()
+	return c
 }

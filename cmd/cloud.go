@@ -64,7 +64,7 @@ func (c *cmdCloud) preRun(cmd *cobra.Command, args []string) error {
 // TODO: split apart some more
 //nolint:funlen,gocognit,cyclop
 func (c *cmdCloud) run(cmd *cobra.Command, args []string) error {
-	c.gs.Console.PrintBanner()
+	c.gs.Console.Printf("\n%s\n\n", c.gs.Console.Banner())
 
 	progressBar := pb.New(
 		pb.WithConstLeft("Init"),
@@ -194,13 +194,13 @@ func (c *cmdCloud) run(cmd *cobra.Command, args []string) error {
 	executionPlan := test.derivedConfig.Scenarios.GetFullExecutionRequirements(et)
 
 	execDesc := getExecutionDescription(
-		c.gs.Console.ApplyTheme, "cloud", args[0], testURL, test.derivedConfig,
+		c.gs.Console.ApplyTheme, "cloud", test.sourceRootPath, testURL, test.derivedConfig,
 		et, executionPlan, nil,
 	)
 	if c.gs.Flags.Quiet {
 		c.gs.Logger.Debug(execDesc)
 	} else {
-		c.gs.Console.Printf(execDesc)
+		c.gs.Console.Print(execDesc)
 	}
 
 	c.gs.Console.ModifyAndPrintBar(

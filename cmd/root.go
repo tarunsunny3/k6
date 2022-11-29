@@ -19,7 +19,6 @@ import (
 	"go.k6.io/k6/errext"
 	"go.k6.io/k6/lib/consts"
 	"go.k6.io/k6/log"
-	"go.k6.io/k6/ui/console"
 )
 
 const waitRemoteLoggerTimeout = time.Second * 5
@@ -57,7 +56,7 @@ func newRootCommand(gs *state.GlobalState) *rootCommand {
 	rootCmd := &cobra.Command{
 		Use:               "k6",
 		Short:             "a next-generation load generator",
-		Long:              "\n" + gs.Console.ApplyTheme(console.Banner),
+		Long:              "\n" + gs.Console.Banner(),
 		SilenceUsage:      true,
 		SilenceErrors:     true,
 		PersistentPreRunE: c.persistentPreRunE,

@@ -38,7 +38,7 @@ type cmdRun struct {
 //nolint:funlen,gocognit,gocyclo,cyclop
 func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 	if !c.gs.Flags.Quiet {
-		c.gs.Console.PrintBanner()
+		c.gs.Console.Printf("\n%s\n\n", c.gs.Console.Banner())
 	}
 
 	test, err := loadAndConfigureTest(c.gs, cmd, args, getConfig)
@@ -150,7 +150,7 @@ func (c *cmdRun) run(cmd *cobra.Command, args []string) error {
 	if c.gs.Flags.Quiet {
 		c.gs.Logger.Debug(execDesc)
 	} else {
-		c.gs.Console.Printf(execDesc)
+		c.gs.Console.Print(execDesc)
 	}
 
 	// Trap Interrupts, SIGINTs and SIGTERMs.
