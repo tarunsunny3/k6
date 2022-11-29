@@ -1,4 +1,4 @@
-package progressbar
+package pb
 
 import (
 	"fmt"
@@ -6,17 +6,15 @@ import (
 	"sync"
 
 	"github.com/sirupsen/logrus"
-	"go.k6.io/k6/ui/console"
 )
 
 // ProgressBar is a simple thread-safe progressbar implementation with
 // callbacks.
 type ProgressBar struct {
-	mutex   sync.RWMutex
-	width   int
-	console *console.Console
-	logger  *logrus.Entry
-	status  Status
+	mutex  sync.RWMutex
+	width  int
+	logger *logrus.Entry
+	status Status
 
 	left     func() string
 	progress func() (progress float64, right []string)
@@ -71,7 +69,7 @@ func WithHijack(hijack func() string) ProgressBarOption {
 func New(options ...ProgressBarOption) *ProgressBar {
 	pb := &ProgressBar{
 		mutex: sync.RWMutex{},
-		width: defaultWidth,
+		width: DefaultWidth,
 	}
 	pb.Modify(options...)
 	return pb
@@ -83,31 +81,6 @@ func (pb *ProgressBar) Left() string {
 	defer pb.mutex.RUnlock()
 
 	return pb.renderLeft(0)
-}
-
-func (pb *ProgressBar) Print() {
-	end := "\n"
-	// TODO: refactor widthDelta away? make the progressbar rendering a bit more
-	// stateless... basically first render the left and right parts, so we know
-	// how long the longest line is, and how much space we have for the progress
-	widthDelta := -console.DefaultTermWidth
-	if pb.console.IsTTY {
-		// If we're in a TTY, instead of printing the bar and going to the next
-		// line, erase everything till the end of the line and return to the
-		// start, so that the next print will overwrite the same line.
-		//
-		// TODO: check for cross platform support
-		end = "\x1b[0K\r"
-		widthDelta = 0
-	}
-	rendered := pb.Render(0, widthDelta)
-	// Only output the left and middle part of the progress bar
-	pb.console.Print(rendered.String() + end)
-}
-
-func (pb *ProgressBar) ModifyAndPrint(options ...ProgressBarOption) {
-	pb.Modify(options...)
-	pb.Print()
 }
 
 // renderLeft renders the left part of the progressbar, replacing text

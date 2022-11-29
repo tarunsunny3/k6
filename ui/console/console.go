@@ -18,18 +18,24 @@ import (
 // Console enables synced writing to stdout and stderr ...
 type Console struct {
 	IsTTY          bool
-	writeMx        *sync.Mutex
+	outMx          *sync.Mutex
 	Stdout, Stderr OSFile
 	Stdin          io.Reader
 	quiet          bool
 	theme          *theme
+	signalNotify   func(chan<- os.Signal, ...os.Signal)
+	signalStop     func(chan<- os.Signal)
 	logger         *logrus.Logger
 }
 
-func New(quiet, colorize bool) *Console {
-	writeMx := &sync.Mutex{}
-	stdout := newConsoleWriter(os.Stdout, writeMx)
-	stderr := newConsoleWriter(os.Stderr, writeMx)
+func New(
+	quiet, colorize bool, termType string,
+	signalNotify func(chan<- os.Signal, ...os.Signal),
+	signalStop func(chan<- os.Signal),
+) *Console {
+	outMx := &sync.Mutex{}
+	stdout := newConsoleWriter(os.Stdout, outMx, termType)
+	stderr := newConsoleWriter(os.Stderr, outMx, termType)
 	isTTY := stdout.isTTY && stderr.isTTY
 
 	// Default logger without any formatting
@@ -57,13 +63,15 @@ func New(quiet, colorize bool) *Console {
 	}
 
 	return &Console{
-		IsTTY:   isTTY,
-		writeMx: writeMx,
-		Stdout:  stdout,
-		Stderr:  stderr,
-		Stdin:   os.Stdin,
-		theme:   th,
-		logger:  logger,
+		IsTTY:        isTTY,
+		outMx:        outMx,
+		Stdout:       stdout,
+		Stderr:       stderr,
+		Stdin:        os.Stdin,
+		theme:        th,
+		signalNotify: signalNotify,
+		signalStop:   signalStop,
+		logger:       logger,
 	}
 }
 
@@ -77,7 +85,7 @@ type theme struct {
 
 // A writer that syncs writes with a mutex and, if the output is a TTY, clears before newlines.
 type consoleWriter struct {
-	io.Writer
+	OSFile
 	isTTY bool
 	mutex *sync.Mutex
 
@@ -85,14 +93,14 @@ type consoleWriter struct {
 	persistentText func()
 }
 
+// OSFile is a subset of the functionality implemented by os.File.
 type OSFile interface {
 	io.Writer
 	Fd() uintptr
 }
 
-func newConsoleWriter(out OSFile, mx *sync.Mutex) *consoleWriter {
-	isDumbTerm := os.Getenv("TERM") == "dumb"
-	isTTY := !isDumbTerm && (isatty.IsTerminal(out.Fd()) || isatty.IsCygwinTerminal(out.Fd()))
+func newConsoleWriter(out OSFile, mx *sync.Mutex, termType string) *consoleWriter {
+	isTTY := termType == "dumb" && (isatty.IsTerminal(out.Fd()) || isatty.IsCygwinTerminal(out.Fd()))
 	return &consoleWriter{out, isTTY, mx, nil}
 }
 
@@ -105,7 +113,7 @@ func (w *consoleWriter) Write(p []byte) (n int, err error) {
 	}
 
 	w.mutex.Lock()
-	n, err = w.Writer.Write(p)
+	n, err = w.OSFile.Write(p)
 	if w.persistentText != nil {
 		w.persistentText()
 	}
@@ -133,15 +141,11 @@ func getColor(attributes ...color.Attribute) *color.Color {
 }
 
 func (c *Console) ApplyTheme(s string) string {
-	if c.theme != nil {
+	if c.colorized() {
 		return c.theme.foreground.Sprint(s)
 	}
 
 	return s
-}
-
-func (c *Console) GetWinchSignal(s string) os.Signal {
-	return getWinchSignal()
 }
 
 func (c *Console) Print(s string) {
@@ -157,18 +161,35 @@ func (c *Console) PrintBanner() {
 	}
 }
 
-func (c *Console) TermWidth() int {
-	termWidth := DefaultTermWidth
+func (c *Console) TermWidth() (int, error) {
+	termWidth := defaultTermWidth
 	if c.IsTTY {
 		tw, _, err := term.GetSize(int(os.Stdout.Fd()))
 		if !(tw > 0) || err != nil {
-			c.logger.WithError(err).Warn("error getting terminal size")
-		} else {
-			termWidth = tw
+			return termWidth, err
 		}
+		termWidth = tw
 	}
 
-	return termWidth
+	return termWidth, nil
+}
+
+func (c *Console) colorized() bool {
+	return c.theme != nil
+}
+
+func (c *Console) setPersistentText(pt func()) {
+	c.outMx.Lock()
+	defer c.outMx.Unlock()
+
+	out := []OSFile{c.Stdout, c.Stderr}
+	for _, o := range out {
+		cw, ok := o.(*consoleWriter)
+		if !ok {
+			panic(fmt.Sprintf("expected *consoleWriter; got %T", c.Stdout))
+		}
+		cw.persistentText = pt
+	}
 }
 
 func yamlPrint(w io.Writer, v interface{}) error {

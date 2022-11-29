@@ -8,7 +8,11 @@ const (
 		`   /          \   |  |\  \ |  (‾)  | \n` +
 		`  / __________ \  |__| \__\ \_____/ .io`
 
-	// DefaultTermWidth specifies the default width in characters of the
-	// terminal window.
-	DefaultTermWidth = 80
+	// Default terminal width in characters.
+	defaultTermWidth = 80
+	// Max length of left-side progress bar text before trimming is forced.
+	maxLeftLength = 30
+	// Amount of padding in chars between rendered progress
+	// bar text and right-side terminal window edge.
+	termPadding = 1
 )

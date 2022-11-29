@@ -9,7 +9,7 @@ import (
 
 	"go.k6.io/k6/lib"
 	"go.k6.io/k6/metrics"
-	"go.k6.io/k6/ui/console/progressbar"
+	"go.k6.io/k6/ui/console/pb"
 )
 
 // BaseExecutor is a helper struct that contains common properties and methods
@@ -22,7 +22,7 @@ type BaseExecutor struct {
 	iterSegIndexMx *sync.Mutex
 	iterSegIndex   *lib.SegmentedIndex
 	logger         *logrus.Entry
-	progress       *progressbar.ProgressBar
+	progress       *pb.ProgressBar
 }
 
 // NewBaseExecutor returns an initialized BaseExecutor
@@ -34,9 +34,9 @@ func NewBaseExecutor(config lib.ExecutorConfig, es *lib.ExecutionState, logger *
 		logger:         logger,
 		iterSegIndexMx: new(sync.Mutex),
 		iterSegIndex:   segIdx,
-		progress: progressbar.New(
-			progressbar.WithLeft(config.GetName),
-			progressbar.WithLogger(logger),
+		progress: pb.New(
+			pb.WithLeft(config.GetName),
+			pb.WithLogger(logger),
 		),
 	}
 }
@@ -66,7 +66,7 @@ func (bs *BaseExecutor) GetLogger() *logrus.Entry {
 }
 
 // GetProgress just returns the progressbar pointer.
-func (bs *BaseExecutor) GetProgress() *progressbar.ProgressBar {
+func (bs *BaseExecutor) GetProgress() *pb.ProgressBar {
 	return bs.progress
 }
 

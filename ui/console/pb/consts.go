@@ -1,4 +1,4 @@
-package progressbar
+package pb
 
 import "github.com/fatih/color"
 
@@ -13,16 +13,11 @@ var (
 )
 
 const (
-	// DefaultWidth of the progress bar
-	defaultWidth = 40
-	// threshold below which progress should be rendered as
-	// percentages instead of filling bars
+	// DefaultWidth of the progress bar.
+	DefaultWidth = 40
+	// Threshold below which progress should be rendered as
+	// percentages instead of filling bars.
 	minWidth = 8
-	// Max length of left-side progress bar text before trimming is forced
-	maxLeftLength = 30
-	// Amount of padding in chars between rendered progress
-	// bar text and right-side terminal window edge.
-	termPadding = 1
 )
 
 // Status of the progress bar

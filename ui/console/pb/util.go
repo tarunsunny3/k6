@@ -1,7 +1,7 @@
-package progressbar
+package pb
 
 // These util functions were copied from lib/util.go to avoid an import cycle
-// (lib -> progressbar -> lib).
+// (lib -> pb -> lib).
 
 // Returns the maximum value of a and b.
 func max(a, b int64) int64 {

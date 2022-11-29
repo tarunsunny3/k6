@@ -1,4 +1,4 @@
-package progressbar
+package pb
 
 import (
 	"math"

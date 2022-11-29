@@ -60,9 +60,12 @@ func NewGlobalState(ctx context.Context, cmdArgs []string, env map[string]string
 	defaultFlags := getDefaultFlags(confDir)
 	flags := getFlags(defaultFlags, env)
 
+	signalNotify := signal.Notify
+	signalStop := signal.Stop
+
 	_, noColorsSet := env["NO_COLOR"] // even empty values disable colors
 	colorizeOutput := !noColorsSet || env["K6_NO_COLOR"] == ""
-	cons := console.New(flags.quiet, colorizeOutput)
+	cons := console.New(flags.quiet, colorizeOutput, env["TERM"], signalNotify, signalStop)
 	logger = cons.Logger()
 
 	return &GlobalState{

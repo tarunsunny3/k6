@@ -1,4 +1,4 @@
-package progressbar
+package console
 
 import (
 	"context"
@@ -9,43 +9,70 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sirupsen/logrus"
-	"go.k6.io/k6/ui/console"
+	"go.k6.io/k6/lib"
+	"go.k6.io/k6/ui/console/pb"
 	"golang.org/x/term"
 )
 
+func (c *Console) PrintBar(bar *pb.ProgressBar) {
+	end := "\n"
+	// TODO: refactor widthDelta away? make the progressbar rendering a bit more
+	// stateless... basically first render the left and right parts, so we know
+	// how long the longest line is, and how much space we have for the progress
+	widthDelta := -defaultTermWidth
+	if c.IsTTY {
+		// If we're in a TTY, instead of printing the bar and going to the next
+		// line, erase everything till the end of the line and return to the
+		// start, so that the next print will overwrite the same line.
+		//
+		// TODO: check for cross platform support
+		end = "\x1b[0K\r"
+		widthDelta = 0
+	}
+	rendered := bar.Render(0, widthDelta)
+	// Only output the left and middle part of the progress bar
+	c.Print(rendered.String() + end)
+}
+
+// TODO: Delete this?
+func (c *Console) ModifyAndPrintBar(bar *pb.ProgressBar, options ...pb.ProgressBarOption) {
+	bar.Modify(options...)
+	c.PrintBar(bar)
+}
+
 // TODO: show other information here?
 // TODO: add a no-progress option that will disable these
-// TODO: don't use global variables...
 //nolint:funlen,gocognit
-func ShowProgress(ctx context.Context, cons *console.Console, pbs []*ProgressBar, logger *logrus.Logger) {
+func (c *Console) ShowProgress(ctx context.Context, pbs []*pb.ProgressBar) {
 	// Get the longest left side string length, to align progress bars
 	// horizontally and trim excess text.
 	var leftLen int64
 	for _, pb := range pbs {
 		l := pb.Left()
-		leftLen = max(int64(len(l)), leftLen)
+		leftLen = lib.Max(int64(len(l)), leftLen)
 	}
 	// Limit to maximum left text length
-	maxLeft := int(min(leftLen, maxLeftLength))
+	maxLeft := int(lib.Min(leftLen, maxLeftLength))
 
 	var progressBarsLastRenderLock sync.Mutex
 	var progressBarsLastRender []byte
 
 	printProgressBars := func() {
 		progressBarsLastRenderLock.Lock()
-		_, _ = cons.Stdout.Write(progressBarsLastRender)
+		_, _ = c.Stdout.Write(progressBarsLastRender)
 		progressBarsLastRenderLock.Unlock()
 	}
 
-	var (
-		termWidth  = cons.TermWidth()
-		widthDelta int
-	)
+	termWidth, errGetTermWidth := c.TermWidth()
+	if errGetTermWidth != nil {
+		c.logger.WithError(errGetTermWidth).Warn("error getting terminal size")
+	}
+
+	var widthDelta int
 	// Default to responsive progress bars when in an interactive terminal
 	renderProgressBars := func(goBack bool) {
 		barText, longestLine := renderMultipleBars(
-			gs.flags.noColor, gs.stdOut.isTTY, goBack, maxLeft, termWidth, widthDelta, pbs,
+			c.colorized(), c.IsTTY, goBack, maxLeft, termWidth, widthDelta, pbs,
 		)
 		widthDelta = termWidth - longestLine - termPadding
 		progressBarsLastRenderLock.Lock()
@@ -54,10 +81,10 @@ func ShowProgress(ctx context.Context, cons *console.Console, pbs []*ProgressBar
 	}
 
 	// Otherwise fallback to fixed compact progress bars
-	if !cons.IsTTY {
-		widthDelta = -defaultWidth
+	if !c.IsTTY {
+		widthDelta = -pb.DefaultWidth
 		renderProgressBars = func(goBack bool) {
-			barText, _ := renderMultipleBars(gs.flags.noColor, gs.stdOut.isTTY, goBack, maxLeft, termWidth, widthDelta, pbs)
+			barText, _ := renderMultipleBars(c.colorized(), c.IsTTY, goBack, maxLeft, termWidth, widthDelta, pbs)
 			progressBarsLastRenderLock.Lock()
 			progressBarsLastRender = []byte(barText)
 			progressBarsLastRenderLock.Unlock()
@@ -67,28 +94,18 @@ func ShowProgress(ctx context.Context, cons *console.Console, pbs []*ProgressBar
 	// TODO: make configurable?
 	updateFreq := 1 * time.Second
 	var stdoutFD int
-	if cons.IsTTY {
-		stdoutFD = int(cons.Stdout.Fd())
+	if c.IsTTY {
+		stdoutFD = int(c.Stdout.Fd())
 		updateFreq = 100 * time.Millisecond
-		gs.ui.setPersistentText(printProgressBars)
-		defer gs.ui.setPersistentText(nil)
-		// gs.outMutex.Lock()
-		// gs.stdOut.persistentText = printProgressBars
-		// gs.stdErr.persistentText = printProgressBars
-		// gs.outMutex.Unlock()
-		// defer func() {
-		// 	gs.outMutex.Lock()
-		// 	gs.stdOut.persistentText = nil
-		// 	gs.stdErr.persistentText = nil
-		// 	gs.outMutex.Unlock()
-		// }()
+		c.setPersistentText(printProgressBars)
+		defer c.setPersistentText(nil)
 	}
 
 	var winch chan os.Signal
 	if sig := getWinchSignal(); sig != nil {
 		winch = make(chan os.Signal, 10)
-		gs.signalNotify(winch, sig)
-		defer gs.signalStop(winch)
+		c.signalNotify(winch, sig)
+		defer c.signalStop(winch)
 	}
 
 	ticker := time.NewTicker(updateFreq)
@@ -97,12 +114,12 @@ func ShowProgress(ctx context.Context, cons *console.Console, pbs []*ProgressBar
 		select {
 		case <-ctxDone:
 			renderProgressBars(false)
-			gs.outMutex.Lock()
+			c.outMx.Lock()
 			printProgressBars()
-			gs.outMutex.Unlock()
+			c.outMx.Unlock()
 			return
 		case <-winch:
-			if gs.stdOut.isTTY && !errTermGetSize {
+			if c.IsTTY && errGetTermWidth == nil {
 				// More responsive progress bar resizing on platforms with SIGWINCH (*nix)
 				tw, _, err := term.GetSize(stdoutFD)
 				if tw > 0 && err == nil {
@@ -111,7 +128,7 @@ func ShowProgress(ctx context.Context, cons *console.Console, pbs []*ProgressBar
 			}
 		case <-ticker.C:
 			// Default ticker-based progress bar resizing
-			if gs.stdOut.isTTY && !errTermGetSize && winch == nil {
+			if c.IsTTY && errGetTermWidth == nil && winch == nil {
 				tw, _, err := term.GetSize(stdoutFD)
 				if tw > 0 && err == nil {
 					termWidth = tw
@@ -119,16 +136,15 @@ func ShowProgress(ctx context.Context, cons *console.Console, pbs []*ProgressBar
 			}
 		}
 		renderProgressBars(true)
-		gs.ui.Print()
-		gs.outMutex.Lock()
+		c.outMx.Lock()
 		printProgressBars()
-		gs.outMutex.Unlock()
+		c.outMx.Unlock()
 	}
 }
 
 //nolint:funlen
 func renderMultipleBars(
-	nocolor, isTTY, goBack bool, maxLeft, termWidth, widthDelta int, pbs []*pb.ProgressBar,
+	color, isTTY, goBack bool, maxLeft, termWidth, widthDelta int, pbs []*pb.ProgressBar,
 ) (string, int) {
 	lineEnd := "\n"
 	if isTTY {
@@ -196,7 +212,7 @@ func renderMultipleBars(
 			longestLine = lineRuneCount
 		}
 		lineBreaks += (lineRuneCount - termPadding) / termWidth
-		if !nocolor {
+		if color {
 			rend.Color = true
 			status = fmt.Sprintf(" %s ", rend.Status())
 			line = fmt.Sprintf(leftPadFmt+"%s%s%s",
