@@ -1,7 +1,7 @@
 package console
 
 const (
-	banner = "" +
+	Banner = "" +
 		`          /\      |‾‾| /‾‾/   /‾‾/   \n` +
 		`     /\  /  \     |  |/  /   /  /    \n` +
 		`    /  \/    \    |     (   /   ‾‾\  \n` +

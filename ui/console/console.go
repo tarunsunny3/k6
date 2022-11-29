@@ -21,7 +21,6 @@ type Console struct {
 	outMx          *sync.Mutex
 	Stdout, Stderr OSFile
 	Stdin          io.Reader
-	quiet          bool
 	theme          *theme
 	signalNotify   func(chan<- os.Signal, ...os.Signal)
 	signalStop     func(chan<- os.Signal)
@@ -29,7 +28,7 @@ type Console struct {
 }
 
 func New(
-	quiet, colorize bool, termType string,
+	colorize bool, termType string,
 	signalNotify func(chan<- os.Signal, ...os.Signal),
 	signalStop func(chan<- os.Signal),
 ) *Console {
@@ -155,7 +154,7 @@ func (c *Console) Printf(s string, a ...interface{}) {
 }
 
 func (c *Console) PrintBanner() {
-	_, err := fmt.Fprintf(c.Stdout, "\n%s\n\n", c.ApplyTheme(banner))
+	_, err := fmt.Fprintf(c.Stdout, "\n%s\n\n", c.ApplyTheme(Banner))
 	if err != nil {
 		c.logger.Warnf("could not print k6 banner message to stdout: %s", err.Error())
 	}

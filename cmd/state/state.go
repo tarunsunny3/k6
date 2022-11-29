@@ -63,7 +63,7 @@ func NewGlobalState(ctx context.Context, cmdArgs []string, env map[string]string
 	signalNotify := signal.Notify
 	signalStop := signal.Stop
 
-	cons := console.New(flags.Quiet, !flags.NoColor, env["TERM"], signalNotify, signalStop)
+	cons := console.New(!flags.NoColor, env["TERM"], signalNotify, signalStop)
 	logger = cons.Logger()
 
 	return &GlobalState{

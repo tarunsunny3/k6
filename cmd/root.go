@@ -19,6 +19,7 @@ import (
 	"go.k6.io/k6/errext"
 	"go.k6.io/k6/lib/consts"
 	"go.k6.io/k6/log"
+	"go.k6.io/k6/ui/console"
 )
 
 const waitRemoteLoggerTimeout = time.Second * 5
@@ -56,17 +57,17 @@ func newRootCommand(gs *state.GlobalState) *rootCommand {
 	rootCmd := &cobra.Command{
 		Use:               "k6",
 		Short:             "a next-generation load generator",
-		Long:              "\n" + getBanner(c.globalState.Flags.noColor || !c.globalState.stdOut.isTTY),
+		Long:              "\n" + gs.Console.ApplyTheme(console.Banner),
 		SilenceUsage:      true,
 		SilenceErrors:     true,
 		PersistentPreRunE: c.persistentPreRunE,
 	}
 
 	rootCmd.PersistentFlags().AddFlagSet(rootCmdPersistentFlagSet(gs))
-	rootCmd.SetArgs(gs.args[1:])
-	rootCmd.SetOut(gs.stdOut)
-	rootCmd.SetErr(gs.stdErr) // TODO: use gs.logger.WriterLevel(logrus.ErrorLevel)?
-	rootCmd.SetIn(gs.stdIn)
+	rootCmd.SetArgs(gs.CmdArgs[1:])
+	rootCmd.SetOut(gs.Console.Stdout)
+	rootCmd.SetErr(gs.Console.Stderr) // TODO: use gs.logger.WriterLevel(logrus.ErrorLevel)?
+	rootCmd.SetIn(gs.Console.Stdin)
 
 	subCommands := []func(*state.GlobalState) *cobra.Command{
 		getCmdArchive, getCmdCloud, getCmdConvert, getCmdInspect,
@@ -101,9 +102,9 @@ func (c *rootCommand) persistentPreRunE(cmd *cobra.Command, args []string) error
 }
 
 func (c *rootCommand) execute() {
-	ctx, cancel := context.WithCancel(c.globalState.ctx)
+	ctx, cancel := context.WithCancel(c.globalState.Ctx)
 	defer cancel()
-	c.globalState.ctx = ctx
+	c.globalState.Ctx = ctx
 
 	err := c.cmd.Execute()
 	if err == nil {
@@ -132,12 +133,12 @@ func (c *rootCommand) execute() {
 
 	c.globalState.Logger.WithFields(fields).Error(errText)
 	if c.loggerIsRemote {
-		c.globalState.fallbackLogger.WithFields(fields).Error(errText)
+		c.globalState.Logger.WithFields(fields).Error(errText)
 		cancel()
 		c.waitRemoteLogger()
 	}
 
-	c.globalState.osExit(exitCode)
+	c.globalState.OSExit(exitCode)
 }
 
 // Execute adds all child commands to the root command sets flags appropriately.
@@ -172,9 +173,9 @@ func rootCmdPersistentFlagSet(gs *state.GlobalState) *pflag.FlagSet {
 
 	flags.StringVar(&gs.Flags.LogOutput, "log-output", gs.Flags.LogOutput,
 		"change the output for k6 logs, possible values are stderr,stdout,none,loki[=host:port],file[=./path.fileformat]")
-	flags.Lookup("log-output").DefValue = gs.DefaultFlags.logOutput
+	flags.Lookup("log-output").DefValue = gs.DefaultFlags.LogOutput
 
-	flags.StringVar(&gs.Flags.logFormat, "logformat", gs.Flags.logFormat, "log output format")
+	flags.StringVar(&gs.Flags.LogFormat, "logformat", gs.Flags.LogFormat, "log output format")
 	oldLogFormat := flags.Lookup("logformat")
 	oldLogFormat.Hidden = true
 	oldLogFormat.Deprecated = "log-format"
