@@ -80,6 +80,14 @@ func New(
 	}
 }
 
+func (c *Console) ApplyTheme(s string) string {
+	if c.colorized() {
+		return c.theme.foreground.Sprint(s)
+	}
+
+	return s
+}
+
 func (c *Console) Banner() string {
 	banner := strings.Join([]string{
 		`          /\      |‾‾| /‾‾/   /‾‾/   `,
@@ -94,14 +102,6 @@ func (c *Console) Banner() string {
 
 func (c *Console) Logger() *logrus.Logger {
 	return c.logger
-}
-
-func (c *Console) ApplyTheme(s string) string {
-	if c.colorized() {
-		return c.theme.foreground.Sprint(s)
-	}
-
-	return s
 }
 
 func (c *Console) Print(s string) {

@@ -31,7 +31,7 @@ func (c *Console) PrintBar(bar *pb.ProgressBar) {
 	}
 	rendered := bar.Render(0, widthDelta)
 	// Only output the left and middle part of the progress bar
-	c.Printf(rendered.String() + end)
+	c.Print(rendered.String() + end)
 }
 
 // TODO: Delete this?
