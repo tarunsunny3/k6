@@ -17,8 +17,8 @@ func getCmdVersion(globalState *globalState) *cobra.Command {
 		Long:  `Show the application version and exit.`,
 		Run: func(_ *cobra.Command, _ []string) {
 			printToStdout(globalState, fmt.Sprintf("k6 v%s\n", consts.FullVersion()))
-			for path, version := range modules.GetJSModuleVersions() {
-				printToStdout(globalState, fmt.Sprintf("extension %s %s\n", path, version))
+			for path, mod := range modules.GetJSModules() {
+				printToStdout(globalState, fmt.Sprintf("extension %s %s\n", path, mod.Version))
 			}
 		},
 	}

@@ -3,6 +3,8 @@ package output
 import (
 	"fmt"
 	"sync"
+
+	"go.k6.io/k6/lib"
 )
 
 //nolint:gochecknoglobals
@@ -32,4 +34,6 @@ func RegisterExtension(name string, mod func(Params) (Output, error)) {
 		panic(fmt.Sprintf("output extension already registered: %s", name))
 	}
 	extensions[name] = mod
+	// o, _ := mod(Params{})
+	fmt.Printf(">>> output extension version: %s\n", lib.GetModuleVersion(mod))
 }
