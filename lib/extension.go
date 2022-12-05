@@ -7,9 +7,17 @@ import (
 	"strings"
 )
 
-type Module struct {
-	Mod     interface{}
-	Version string
+type ExtensionType uint8
+
+const (
+	JSExtension ExtensionType = iota + 1
+	OutputExtension
+)
+
+type Extension struct {
+	Name, Version string
+	Type          ExtensionType
+	Mod           interface{}
 }
 
 func GetModuleVersion(mod interface{}) string {
