@@ -1,7 +1,6 @@
 package lib
 
 import (
-	"fmt"
 	"reflect"
 	"runtime"
 	"runtime/debug"
@@ -15,26 +14,31 @@ type Module struct {
 
 func GetModuleVersion(mod interface{}) string {
 	t := reflect.TypeOf(mod)
-	fmt.Printf(">>> reflected type kind: %#+v\n", t.Kind().String())
-	val := reflect.ValueOf(mod)
-	fmt.Printf(">>> package path before: %#+v\n", runtime.FuncForPC(val.Pointer()).Name())
-	p := t.PkgPath()
-	if p == "" {
-		if t.Kind() != reflect.Ptr {
+	path := t.PkgPath()
+
+	if path == "" {
+		switch t.Kind() {
+		case reflect.Ptr:
+			if t.Elem() != nil {
+				path = t.Elem().PkgPath()
+			}
+		case reflect.Func:
+			path = runtime.FuncForPC(reflect.ValueOf(mod).Pointer()).Name()
+		default:
 			return ""
 		}
-		if t.Elem() != nil {
-			p = t.Elem().PkgPath()
-		}
 	}
+
 	buildInfo, ok := debug.ReadBuildInfo()
 	if !ok {
 		return ""
 	}
+
+	// fmt.Printf(">>> mod path: %s\n", path)
 	for _, dep := range buildInfo.Deps {
-		packagePath := strings.TrimSpace(dep.Path)
-		fmt.Printf(">>> packagePath: %s\n", packagePath)
-		if strings.HasPrefix(p, packagePath) {
+		depPath := strings.TrimSpace(dep.Path)
+		// fmt.Printf(">>> dep path: %s\n", depPath)
+		if strings.HasPrefix(path, depPath) {
 			if dep.Replace != nil {
 				return dep.Replace.Version
 			}
