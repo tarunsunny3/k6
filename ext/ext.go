@@ -10,6 +10,13 @@ import (
 	"sync"
 )
 
+// TODO: Make an ExtensionRegistry?
+//nolint:gochecknoglobals
+var (
+	mx         sync.RWMutex
+	extensions = make(map[ExtensionType]map[string]*Extension)
+)
+
 type ExtensionType uint8
 
 const (
@@ -38,13 +45,6 @@ func (e Extension) String() string {
 	return fmt.Sprintf("[%s] %s %s %s", e.Type, e.Path, e.Name, e.Version)
 }
 
-//nolint:gochecknoglobals
-// TODO: Make an ExtensionRegistry?
-var (
-	mx         sync.RWMutex
-	extensions = make(map[ExtensionType]map[string]*Extension)
-)
-
 func Register(name string, typ ExtensionType, mod interface{}) {
 	mx.Lock()
 	defer mx.Unlock()
@@ -69,7 +69,7 @@ func Register(name string, typ ExtensionType, mod interface{}) {
 	}
 }
 
-func Get(typ ExtensionType) []*Extension {
+func Get(typ ExtensionType) map[string]*Extension {
 	mx.RLock()
 	defer mx.RUnlock()
 
@@ -78,14 +78,35 @@ func Get(typ ExtensionType) []*Extension {
 		panic(fmt.Sprintf("unsupported extension type: %T", typ))
 	}
 
-	result := make([]*Extension, 0, len(exts))
+	result := make(map[string]*Extension, len(exts))
 
-	for _, ext := range exts {
-		result = append(result, ext)
+	for name, ext := range exts {
+		result[name] = ext
+	}
+
+	return result
+}
+
+// GetAll returns all extensions, sorted by their import path and name.
+func GetAll() []*Extension {
+	mx.RLock()
+	defer mx.RUnlock()
+
+	js, out := extensions[JSExtension], extensions[OutputExtension]
+	result := make([]*Extension, 0, len(js)+len(out))
+
+	for _, e := range js {
+		result = append(result, e)
+	}
+	for _, e := range out {
+		result = append(result, e)
 	}
 
 	sort.Slice(result, func(i, j int) bool {
-		return result[i].Path > result[j].Path && result[i].Name > result[j].Name
+		if result[i].Path == result[j].Path {
+			return result[i].Name < result[j].Name
+		}
+		return result[i].Path < result[j].Path
 	})
 
 	return result
