@@ -42,7 +42,7 @@ type Extension struct {
 }
 
 func (e Extension) String() string {
-	return fmt.Sprintf("[%s] %s %s %s", e.Type, e.Path, e.Name, e.Version)
+	return fmt.Sprintf("%s %s, %s [%s]", e.Path, e.Version, e.Name, e.Type)
 }
 
 func Register(name string, typ ExtensionType, mod interface{}) {
@@ -114,24 +114,21 @@ func GetAll() []*Extension {
 
 func getModuleInfo(mod interface{}) (path, version string) {
 	t := reflect.TypeOf(mod)
-	path = t.PkgPath()
 
-	if path == "" {
-		switch t.Kind() {
-		case reflect.Ptr:
-			if t.Elem() != nil {
-				path = t.Elem().PkgPath()
-			}
-		case reflect.Func:
-			path = runtime.FuncForPC(reflect.ValueOf(mod).Pointer()).Name()
-		default:
-			return "", ""
+	switch t.Kind() {
+	case reflect.Ptr:
+		if t.Elem() != nil {
+			path = t.Elem().PkgPath()
 		}
+	case reflect.Func:
+		path = runtime.FuncForPC(reflect.ValueOf(mod).Pointer()).Name()
+	default:
+		return
 	}
 
 	buildInfo, ok := debug.ReadBuildInfo()
 	if !ok {
-		return "", ""
+		return
 	}
 
 	for _, dep := range buildInfo.Deps {
@@ -144,7 +141,7 @@ func getModuleInfo(mod interface{}) (path, version string) {
 		}
 	}
 
-	return "", ""
+	return
 }
 
 func init() {
