@@ -17,6 +17,7 @@ import (
 
 	"gopkg.in/yaml.v3"
 
+	"go.k6.io/k6/ext"
 	"go.k6.io/k6/lib"
 	"go.k6.io/k6/lib/consts"
 	"go.k6.io/k6/output"
@@ -147,6 +148,13 @@ func printExecutionDescription(
 	buf := &strings.Builder{}
 	fmt.Fprintf(buf, "  execution: %s\n", valueColor.Sprint(execution))
 	fmt.Fprintf(buf, "     script: %s\n", valueColor.Sprint(filename))
+
+	exts := ext.GetAll()
+	if len(exts) > 0 {
+		extsDesc := getExtensionsDescription(exts, 13, 1)
+		fmt.Fprintf(buf, " extensions: %s\n",
+			valueColor.Sprint(strings.Join(extsDesc, "\n")))
+	}
 
 	var outputDescriptions []string
 	switch {
@@ -411,4 +419,18 @@ func yamlPrint(w io.Writer, v interface{}) error {
 		return fmt.Errorf("could flush the data to the output: %w", err)
 	}
 	return nil
+}
+
+func getExtensionsDescription(exts []*ext.Extension, leftPad, padStart int) []string {
+	extsDesc := make([]string, 0, len(exts))
+	for i, e := range exts {
+		desc := e.String()
+		extFmt := "%s"
+		if i >= padStart {
+			extFmt = fmt.Sprintf("%%%ds", len(desc)+leftPad)
+		}
+		extsDesc = append(extsDesc, fmt.Sprintf(extFmt, desc))
+	}
+
+	return extsDesc
 }

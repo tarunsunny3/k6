@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -17,8 +18,12 @@ func getCmdVersion(globalState *globalState) *cobra.Command {
 		Long:  `Show the application version and exit.`,
 		Run: func(_ *cobra.Command, _ []string) {
 			printToStdout(globalState, fmt.Sprintf("k6 v%s\n", consts.FullVersion()))
-			for _, e := range ext.GetAll() {
-				printToStdout(globalState, fmt.Sprintf("%s\n", e))
+
+			exts := ext.GetAll()
+			if len(exts) > 0 {
+				extsDesc := getExtensionsDescription(exts, 2, 0)
+				printToStdout(globalState, fmt.Sprintf("Extensions:\n%s\n",
+					strings.Join(extsDesc, "\n")))
 			}
 		},
 	}
