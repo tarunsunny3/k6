@@ -11,14 +11,17 @@ import (
 )
 
 // TODO: Make an ExtensionRegistry?
+//
 //nolint:gochecknoglobals
 var (
 	mx         sync.RWMutex
 	extensions = make(map[ExtensionType]map[string]*Extension)
 )
 
+// ExtensionType is the type of all supported k6 extensions.
 type ExtensionType uint8
 
+// All supported k6 extension types.
 const (
 	JSExtension ExtensionType = iota + 1
 	OutputExtension
@@ -35,6 +38,7 @@ func (e ExtensionType) String() string {
 	return s
 }
 
+// Extension is a generic container for any k6 extension.
 type Extension struct {
 	Name, Path, Version string
 	Type                ExtensionType
@@ -45,6 +49,9 @@ func (e Extension) String() string {
 	return fmt.Sprintf("%s %s, %s [%s]", e.Path, e.Version, e.Name, e.Type)
 }
 
+// Register a new extension with the given name and type. This function will
+// panic if an unsupported extension type is provided, or if an extension of the
+// same type and name is already registered.
 func Register(name string, typ ExtensionType, mod interface{}) {
 	mx.Lock()
 	defer mx.Unlock()
@@ -69,6 +76,7 @@ func Register(name string, typ ExtensionType, mod interface{}) {
 	}
 }
 
+// Get returns all extensions of the specified type.
 func Get(typ ExtensionType) map[string]*Extension {
 	mx.RLock()
 	defer mx.RUnlock()
