@@ -47,6 +47,20 @@ sync_to_s3() {
     --add-header='Cache-Control: max-age=60,must-revalidate' "s3://${S3PATH}/"
 }
 
+# Create the deb822 sources file if it doesn't exist in S3 already.
+s3cmd get "s3://${S3PATH}/k6.sources" "${REPODIR}/k6.sources" || {
+  log "Creating the deb822 sources file ..."
+  cat > "${REPODIR}/k6.sources" <<EOF
+Types: deb
+URIs: https://${_s3bucket}/deb
+Suites: stable
+Components: main
+Architectures: amd64
+Signed-By:
+$(gpg2 --export --armor "$PGPKEYID" | sed 's/^/ /')
+EOF
+}
+
 # We don't publish i386 packages, but the repo structure is needed for
 # compatibility on some systems. See https://unix.stackexchange.com/a/272916 .
 architectures="amd64 i386"
