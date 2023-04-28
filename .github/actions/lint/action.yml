@@ -11,8 +11,12 @@ runs:
         check-latest: true
     - name: Get golangci-lint version and download rules
       shell: bash
+      env:
+        #TODO: remove after https://github.com/actions/runner/issues/2473 is fixed
+        GITHUB_ACTION_REF: ${{ github.action_ref }}
       run: |
-        RulesURL="https://raw.githubusercontent.com/grafana/k6/${{ github.action_ref }}/.golangci.yml"
+        set -eEuxo pipefail
+        RulesURL="https://raw.githubusercontent.com/grafana/k6/${GITHUB_ACTION_REF}/.golangci.yml"
         echo "Downloading ${RulesURL}..."
         curl "${RulesURL}" --output "${{ github.action_path }}/.golangci.yml"
 
