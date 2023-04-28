@@ -13,7 +13,7 @@ runs:
       shell: bash
       env:
         #TODO: remove after https://github.com/actions/runner/issues/2473 is fixed
-        GITHUB_ACTION_REF: ${{ github.action_ref }}
+        GITHUB_ACTION_REF: ${{ github.action_ref || github.ref_name }}
       run: |
         set -eEuxo pipefail
         RulesURL="https://raw.githubusercontent.com/grafana/k6/${GITHUB_ACTION_REF}/.golangci.yml"
