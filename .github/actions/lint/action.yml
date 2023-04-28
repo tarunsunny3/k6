@@ -9,9 +9,13 @@ runs:
       with:
         go-version: 1.20.x
         check-latest: true
-    - name: Retrieve golangci-lint version
+    - name: Get golangci-lint version and download rules
       shell: bash
       run: |
+        RulesURL="https://raw.githubusercontent.com/grafana/k6/${{ github.action_ref }}/.golangci.yml"
+        echo "Downloading ${RulesURL}..."
+        curl "${RulesURL}" --output "${{ github.action_path }}/.golangci.yml"
+
         echo "GolangCIVersion=$(head -n 1 "${{ github.action_path }}/.golangci.yml" | tr -d '# ')" >> $GITHUB_OUTPUT
       id: getenv
     - name: golangci-lint
