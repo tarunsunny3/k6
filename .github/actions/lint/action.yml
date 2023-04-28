@@ -11,12 +11,14 @@ runs:
         check-latest: true
     - name: Get golangci-lint version and download rules
       shell: bash
-      env:
-        #TODO: remove after https://github.com/actions/runner/issues/2473 is fixed
-        GITHUB_ACTION_REF: ${{ github.action_ref || github.ref_name }}
+      env: #TODO: remove after https://github.com/actions/runner/issues/2473 is fixed
+        GITHUB_ACTION_REF_EXP: ${{ github.action_ref }}
+        GITHUB_ACTION_REPOSITORY_EXP: ${{ github.action_repository }}
+        GITHUB_ACTION_PATH_EXP: ${{ github.action_path }}
+        GITHUB_ACTION_EXP: ${{ github.action }}
       run: |
         set -eEuxo pipefail
-        echo "$GITHUB_ACTION_REF"
+        echo "$GITHUB_ACTION_REF_EXP"
         echo "${{ github.action_ref }}"
         echo "${{ github.ref_name }}"
         env
