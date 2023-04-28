@@ -16,6 +16,11 @@ runs:
         GITHUB_ACTION_REF: ${{ github.action_ref || github.ref_name }}
       run: |
         set -eEuxo pipefail
+        echo "$GITHUB_ACTION_REF"
+        echo "${{ github.action_ref }}"
+        echo "${{ github.ref_name }}"
+        env
+
         RulesURL="https://raw.githubusercontent.com/grafana/k6/${GITHUB_ACTION_REF}/.golangci.yml"
         echo "Downloading ${RulesURL}..."
         curl "${RulesURL}" --output "${{ github.action_path }}/.golangci.yml"
