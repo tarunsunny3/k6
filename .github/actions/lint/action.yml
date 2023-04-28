@@ -12,22 +12,13 @@ runs:
     - name: Get golangci-lint version and download rules
       shell: bash
       env: #TODO: remove after https://github.com/actions/runner/issues/2473 is fixed
-        GITHUB_ACTION_REF_EXP: ${{ github.action_ref }}
-        GITHUB_ACTION_REPOSITORY_EXP: ${{ github.action_repository }}
-        GITHUB_ACTION_PATH_EXP: ${{ github.action_path }}
-        GITHUB_ACTION_EXP: ${{ github.action }}
+        GITHUB_ACTION_REF: ${{ github.action_ref }}
       run: |
-        set -eEuxo pipefail
-        echo "$GITHUB_ACTION_REF_EXP"
-        echo "${{ github.action_ref }}"
-        echo "${{ github.ref_name }}"
-        env
-
-        RulesURL="https://raw.githubusercontent.com/grafana/k6/${GITHUB_ACTION_REF}/.golangci.yml"
+        RulesURL="https://raw.githubusercontent.com/grafana/k6/${{ env.GITHUB_ACTION_REF }}/.golangci.yml"
         echo "Downloading ${RulesURL}..."
         curl "${RulesURL}" --output "${{ github.action_path }}/.golangci.yml"
 
-        echo "GolangCIVersion=$(head -n 1 "${{ github.action_path }}/.golangci.yml" | tr -d '# ')" >> $GITHUB_OUTPUT
+        echo "GolangCIVersion=$(head -n 1 "${{ github.action_path }}/.golangci.yml" | tr -d '# ')" >> "${GITHUB_OUTPUT}"
       id: getenv
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v3
