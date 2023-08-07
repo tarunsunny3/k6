@@ -163,6 +163,7 @@ func validateRequiredSystemTags(scriptTags *metrics.SystemTagSet) error {
 func (out *Output) Start() error {
 	if out.config.PushRefID.Valid {
 		out.testRunID = out.config.PushRefID.String
+		consts.TestRunID = out.testRunID
 		out.logger.WithField("testRunId", out.testRunID).Debug("Directly pushing metrics without init")
 		return out.startVersionedOutput()
 	}
@@ -187,6 +188,7 @@ func (out *Output) Start() error {
 		return err
 	}
 	out.testRunID = response.ReferenceID
+	consts.TestRunID = out.testRunID
 
 	if response.ConfigOverride != nil {
 		out.logger.WithFields(logrus.Fields{

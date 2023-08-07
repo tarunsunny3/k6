@@ -664,6 +664,7 @@ func (u *VU) Activate(params *lib.VUActivationParams) lib.ActiveVU {
 	for key, value := range params.Env {
 		env[key] = value
 	}
+	env["K6_CLOUD_TEST_RUN_ID"] = consts.TestRunID
 	u.Runtime.Set("__ENV", env)
 
 	opts := u.Runner.Bundle.Options

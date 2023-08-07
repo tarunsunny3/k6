@@ -13,6 +13,8 @@ const Version = "0.45.0"
 // VersionDetails can be set externally as part of the build process
 var VersionDetails = "" //nolint:gochecknoglobals
 
+var TestRunID = "UNK" //nolint:gochecknoglobals
+
 // FullVersion returns the maximally full version and build information for
 // the currently running k6 executable.
 func FullVersion() string {
