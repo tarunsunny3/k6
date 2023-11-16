@@ -165,7 +165,7 @@ func (r *Runner) newVU(
 	dialer := &netext.Dialer{
 		Dialer:           r.BaseDialer,
 		Resolver:         r.Resolver,
-		Blacklist:        r.Bundle.Options.BlacklistIPs,
+		Blacklist:        r.Bundle.Options.BlacklistIPs.IPs,
 		BlockedHostnames: r.Bundle.Options.BlockedHostnames.Trie,
 		Hosts:            r.Bundle.Options.Hosts.Trie,
 	}

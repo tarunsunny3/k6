@@ -163,7 +163,7 @@ func getOptions(flags *pflag.FlagSet) (lib.Options, error) {
 		if parseErr != nil {
 			return opts, fmt.Errorf("error parsing blacklist-ip '%s': %w", s, parseErr)
 		}
-		opts.BlacklistIPs = append(opts.BlacklistIPs, net)
+		opts.BlacklistIPs.IPs = append(opts.BlacklistIPs.IPs, net)
 	}
 
 	blockedHostnameStrings, err := flags.GetStringSlice("block-hostnames")
