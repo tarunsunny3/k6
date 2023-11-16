@@ -482,7 +482,7 @@ func (fs *FrameSession) initOptions() error {
 
 	var reqIntercept bool
 	if state.Options.BlockedHostnames.Trie != nil ||
-		len(state.Options.BlacklistIPs) > 0 {
+		len(state.Options.BlacklistIPs.IPs) > 0 {
 		reqIntercept = true
 	}
 	if err := fs.updateRequestInterception(reqIntercept); err != nil {

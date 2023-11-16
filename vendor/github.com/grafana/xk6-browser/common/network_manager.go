@@ -516,7 +516,7 @@ func (m *NetworkManager) onRequestPaused(event *fetch.EventRequestPaused) { //no
 		state = m.vu.State()
 	)
 	if ip != nil {
-		failErr = checkBlockedIPs(ip, state.Options.BlacklistIPs)
+		failErr = checkBlockedIPs(ip, state.Options.BlacklistIPs.IPs)
 		return
 	}
 	failErr = checkBlockedHosts(host, state.Options.BlockedHostnames.Trie)
@@ -531,7 +531,7 @@ func (m *NetworkManager) onRequestPaused(event *fetch.EventRequestPaused) { //no
 			"resolving %q: %s", host, err)
 		return
 	}
-	failErr = checkBlockedIPs(ip, state.Options.BlacklistIPs)
+	failErr = checkBlockedIPs(ip, state.Options.BlacklistIPs.IPs)
 }
 
 func checkBlockedHosts(host string, blockedHosts *k6types.HostnameTrie) error {
