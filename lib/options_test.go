@@ -17,6 +17,89 @@ import (
 	"go.k6.io/k6/metrics"
 )
 
+func TestBlacklistIPsOption(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Apply", func(t *testing.T) {
+		t.Parallel()
+		opts := Options{}.Apply(Options{
+			BlacklistIPs: []*types.IPNet{{
+				IPNet: net.IPNet{
+					IP:   net.IPv4bcast,
+					Mask: net.CIDRMask(31, 32),
+				},
+			}},
+		})
+		assert.NotNil(t, opts.BlacklistIPs)
+		assert.NotEmpty(t, opts.BlacklistIPs)
+		assert.Equal(t, net.IPv4bcast, opts.BlacklistIPs[0].IP)
+		assert.Equal(t, net.CIDRMask(31, 32), opts.BlacklistIPs[0].Mask)
+	})
+
+	t.Run("MarshalJSON", func(t *testing.T) {
+		t.Parallel()
+		opts := Options{
+			BlacklistIPs: []*types.IPNet{{
+				IPNet: net.IPNet{
+					IP:   net.IPv4bcast,
+					Mask: net.CIDRMask(31, 32),
+				},
+			}},
+		}
+		b, err := json.Marshal(opts)
+		require.NoError(t, err)
+		assert.Contains(t, string(b), `"blacklistIPs":["255.255.255.255/31"]`, string(b))
+	})
+
+	t.Run("UnmarshalJSON", func(t *testing.T) {
+		t.Parallel()
+
+		tests := []struct {
+			in       string
+			expErr   bool
+			expEmpty bool
+			expIPs   net.IP
+		}{
+			// {
+			// 	in:     `null`,
+			// 	expErr: true,
+			// },
+			// {
+			// 	in:     `{}`,
+			// 	expErr: true,
+			// },
+			// {
+			// 	in:     `[null]`,
+			// 	expErr: true,
+			// },
+			{
+				in:     `["ksk"]`,
+				expErr: true,
+			},
+			{
+				in:     `["10.0.0.0/8"]`,
+				expIPs: net.ParseIP("10.0.0.0"),
+			},
+		}
+
+		for _, tt := range tests {
+			tt := tt
+			t.Run(tt.in, func(t *testing.T) {
+				t.Parallel()
+				var uopts Options
+				err := json.Unmarshal([]byte(`{"blacklistIPs":`+tt.in+`}`), &uopts)
+				if tt.expErr {
+					require.Error(t, err)
+				} else {
+					require.NoError(t, err)
+				}
+				require.Len(t, uopts.BlacklistIPs, 1)
+				assert.True(t, tt.expIPs.Equal(uopts.BlacklistIPs[0].IPNet.IP))
+			})
+		}
+	})
+}
+
 func TestOptions(t *testing.T) {
 	t.Parallel()
 	t.Run("Paused", func(t *testing.T) {
@@ -417,34 +500,6 @@ func TestOptions(t *testing.T) {
 		assert.True(t, opts.NoCookiesReset.Valid)
 		assert.True(t, opts.NoCookiesReset.Bool)
 	})
-	t.Run("BlacklistIPs", func(t *testing.T) {
-		t.Parallel()
-		opts := Options{}.Apply(Options{
-			BlacklistIPs: []*IPNet{{
-				IPNet: net.IPNet{
-					IP:   net.IPv4bcast,
-					Mask: net.CIDRMask(31, 32),
-				},
-			}},
-		})
-		assert.NotNil(t, opts.BlacklistIPs)
-		assert.NotEmpty(t, opts.BlacklistIPs)
-		assert.Equal(t, net.IPv4bcast, opts.BlacklistIPs[0].IP)
-		assert.Equal(t, net.CIDRMask(31, 32), opts.BlacklistIPs[0].Mask)
-
-		t.Run("JSON", func(t *testing.T) {
-			t.Parallel()
-
-			b, err := json.Marshal(opts)
-			require.NoError(t, err)
-
-			var uopts Options
-			err = json.Unmarshal(b, &uopts)
-			require.NoError(t, err)
-			require.Len(t, uopts.BlacklistIPs, 1)
-			require.Equal(t, "255.255.255.254/31", uopts.BlacklistIPs[0].String())
-		})
-	})
 	t.Run("BlockedHostnames", func(t *testing.T) {
 		t.Parallel()
 		blockedHostnames, err := types.NewNullHostnameTrie([]string{"test.k6.io", "*valid.pattern"})
@@ -683,9 +738,9 @@ func TestOptionsEnv(t *testing.T) {
 	}
 }
 
-func TestCIDRUnmarshal(t *testing.T) {
+func TestIPNetUnmarshalText(t *testing.T) {
 	t.Parallel()
-	testData := []struct {
+	tests := []struct {
 		input          string
 		expectedOutput *IPNet
 		expectFailure  bool
@@ -711,19 +766,19 @@ func TestCIDRUnmarshal(t *testing.T) {
 		{"fc00::1234::/48", nil, true},
 	}
 
-	for _, data := range testData {
-		data := data
-		t.Run(data.input, func(t *testing.T) {
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.input, func(t *testing.T) {
 			t.Parallel()
-			actualIPNet := &IPNet{}
-			err := actualIPNet.UnmarshalText([]byte(data.input))
+			actualIPNet := &types.IPNet{}
+			err := actualIPNet.UnmarshalText([]byte(tt.input))
 
-			if data.expectFailure {
+			if tt.expectFailure {
 				require.Error(t, err)
-				require.Contains(t, err.Error(), "invalid CIDR address: "+data.input)
+				require.Contains(t, err.Error(), "invalid CIDR address: "+tt.input)
 			} else {
 				require.NoError(t, err)
-				assert.Equal(t, data.expectedOutput, actualIPNet)
+				assert.Equal(t, tt.expectedOutput, actualIPNet)
 			}
 		})
 	}
