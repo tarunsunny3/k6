@@ -23,62 +23,74 @@ func TestBlacklistIPsOption(t *testing.T) {
 	t.Run("Apply", func(t *testing.T) {
 		t.Parallel()
 		opts := Options{}.Apply(Options{
-			BlacklistIPs: []*types.IPNet{{
-				IPNet: net.IPNet{
-					IP:   net.IPv4bcast,
-					Mask: net.CIDRMask(31, 32),
+			BlacklistIPs: NullIPNets{
+				IPs: []*IPNet{
+					{IPNet: net.IPNet{
+						IP:   net.IPv4bcast,
+						Mask: net.CIDRMask(31, 32),
+					},
+					},
 				},
-			}},
+				Valid: true,
+			},
 		})
-		assert.NotNil(t, opts.BlacklistIPs)
-		assert.NotEmpty(t, opts.BlacklistIPs)
-		assert.Equal(t, net.IPv4bcast, opts.BlacklistIPs[0].IP)
-		assert.Equal(t, net.CIDRMask(31, 32), opts.BlacklistIPs[0].Mask)
+		require.NotNil(t, opts.BlacklistIPs)
+		require.True(t, opts.BlacklistIPs.Valid)
+		require.NotEmpty(t, opts.BlacklistIPs.IPs)
+		assert.Equal(t, net.IPv4bcast, opts.BlacklistIPs.IPs[0].IP)
+		assert.Equal(t, net.CIDRMask(31, 32), opts.BlacklistIPs.IPs[0].Mask)
 	})
 
 	t.Run("MarshalJSON", func(t *testing.T) {
 		t.Parallel()
 		opts := Options{
-			BlacklistIPs: []*types.IPNet{{
-				IPNet: net.IPNet{
-					IP:   net.IPv4bcast,
-					Mask: net.CIDRMask(31, 32),
-				},
-			}},
+			BlacklistIPs: NullIPNets{
+				IPs: []*IPNet{{
+					IPNet: net.IPNet{
+						IP:   net.IPv4bcast,
+						Mask: net.CIDRMask(31, 32),
+					},
+				}},
+			},
 		}
 		b, err := json.Marshal(opts)
 		require.NoError(t, err)
-		assert.Contains(t, string(b), `"blacklistIPs":["255.255.255.255/31"]`, string(b))
+		assert.Contains(t, string(b), `"blacklistIPs":["255.255.255.255/31"]`)
 	})
 
 	t.Run("UnmarshalJSON", func(t *testing.T) {
 		t.Parallel()
 
 		tests := []struct {
-			in       string
-			expErr   bool
-			expEmpty bool
-			expIPs   net.IP
+			in     string
+			expErr bool
+			expIPs []*IPNet
 		}{
-			// {
-			// 	in:     `null`,
-			// 	expErr: true,
-			// },
-			// {
-			// 	in:     `{}`,
-			// 	expErr: true,
-			// },
-			// {
-			// 	in:     `[null]`,
-			// 	expErr: true,
-			// },
+			{
+				in:     `null`,
+				expErr: false,
+				expIPs: nil,
+			},
+			{
+				in:     `{}`,
+				expErr: true,
+			},
+			{
+				in:     `[null]`,
+				expErr: true,
+			},
 			{
 				in:     `["ksk"]`,
 				expErr: true,
 			},
 			{
-				in:     `["10.0.0.0/8"]`,
-				expIPs: net.ParseIP("10.0.0.0"),
+				in: `["10.0.0.0/8"]`,
+				expIPs: func() []*IPNet {
+					_, ipn, _ := net.ParseCIDR("10.0.0.0/8")
+					return []*IPNet{
+						{IPNet: *ipn},
+					}
+				}(),
 			},
 		}
 
@@ -90,11 +102,12 @@ func TestBlacklistIPsOption(t *testing.T) {
 				err := json.Unmarshal([]byte(`{"blacklistIPs":`+tt.in+`}`), &uopts)
 				if tt.expErr {
 					require.Error(t, err)
-				} else {
-					require.NoError(t, err)
+					assert.False(t, uopts.BlacklistIPs.Valid)
+					return
 				}
-				require.Len(t, uopts.BlacklistIPs, 1)
-				assert.True(t, tt.expIPs.Equal(uopts.BlacklistIPs[0].IPNet.IP))
+				require.NoError(t, err)
+				assert.True(t, uopts.BlacklistIPs.Valid)
+				assert.Equal(t, tt.expIPs, uopts.BlacklistIPs.IPs)
 			})
 		}
 	})
@@ -770,7 +783,7 @@ func TestIPNetUnmarshalText(t *testing.T) {
 		tt := tt
 		t.Run(tt.input, func(t *testing.T) {
 			t.Parallel()
-			actualIPNet := &types.IPNet{}
+			actualIPNet := &IPNet{}
 			err := actualIPNet.UnmarshalText([]byte(tt.input))
 
 			if tt.expectFailure {

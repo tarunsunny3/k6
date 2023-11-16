@@ -183,6 +183,39 @@ func decryptPrivateKey(privKey, password string) ([]byte, error) {
 	return key, nil
 }
 
+type NullIPNets struct {
+	IPs   []*IPNet
+	Valid bool
+}
+
+// UnmarshalText populates the IPNet from the given CIDR
+func (nets *NullIPNets) UnmarshalJSON(b []byte) error {
+	var ips []string
+	err := json.Unmarshal(b, &ips)
+	if err != nil {
+		return err
+	}
+	netIPs := make([]*IPNet, 0, len(ips))
+	for _, ip := range ips {
+		ipn := &IPNet{}
+		err := ipn.UnmarshalText([]byte(ip))
+		if err != nil {
+			return err
+		}
+		netIPs = append(netIPs, ipn)
+	}
+	if len(netIPs) > 0 {
+		nets.IPs = netIPs
+	}
+	nets.Valid = true
+	return nil
+}
+
+// UnmarshalText populates the IPNet from the given CIDR
+func (nets NullIPNets) MarshalJSON() ([]byte, error) {
+	return json.Marshal(nets.IPs)
+}
+
 // IPNet is a wrapper around net.IPNet for JSON unmarshalling
 type IPNet struct {
 	net.IPNet
@@ -279,7 +312,7 @@ type Options struct {
 	Thresholds map[string]metrics.Thresholds `json:"thresholds" envconfig:"K6_THRESHOLDS"`
 
 	// Blacklist IP ranges that tests may not contact. Mainly useful in hosted setups.
-	BlacklistIPs []*IPNet `json:"blacklistIPs" envconfig:"K6_BLACKLIST_IPS"`
+	BlacklistIPs NullIPNets `json:"blacklistIPs" envconfig:"K6_BLACKLIST_IPS"`
 
 	// Block hostname patterns that tests may not contact.
 	BlockedHostnames types.NullHostnameTrie `json:"blockHostnames" envconfig:"K6_BLOCK_HOSTNAMES"`
@@ -437,7 +470,7 @@ func (o Options) Apply(opts Options) Options {
 	if opts.Thresholds != nil {
 		o.Thresholds = opts.Thresholds
 	}
-	if opts.BlacklistIPs != nil {
+	if opts.BlacklistIPs.Valid {
 		o.BlacklistIPs = opts.BlacklistIPs
 	}
 	if opts.BlockedHostnames.Valid {
