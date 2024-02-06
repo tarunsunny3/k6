@@ -91,3 +91,43 @@ function assert_in_array(actual, expected, description) {
 function assert_unreached(description) {
 	throw `reached unreachable code, reason: ${description}`
 }
+
+/**
+ * Assert that ``actual`` and ``expected`` are both arrays, and that the array properties of
+ * ``actual`` and ``expected`` are all the same value (as for :js:func:`assert_equals`).
+ *
+ * @param {Array} actual - Test array.
+ * @param {Array} expected - Array that is expected to contain the same values as ``actual``.
+ * @param {string} [description] - Description of the condition being tested.
+ */
+function assert_array_equals(actual, expected, description) {
+	if (typeof actual !== "object" || actual === null || !("length" in actual)) {
+		throw `assert_array_equals ${description} value is ${actual}, expected array`;
+	}
+
+	if (actual.length !== expected.length) {
+		throw `assert_array_equals ${description} lengths differ, expected array ${expected} length ${expected.length}, got ${actual} length ${actual.length}`;
+	}
+
+	for (var i = 0; i < actual.length; i++) {
+		if (actual.hasOwnProperty(i) !== expected.hasOwnProperty(i)) {
+			throw `assert_array_equals ${description} expected property ${i} to be ${expected.hasOwnProperty(i)} but was ${actual.hasOwnProperty(i)} (expected array ${expected} got ${actual})`;
+		}
+
+		if (!same_value(expected[i], actual[i])) {
+			throw `assert_array_equals ${description} expected property ${i} to be ${expected[i]} but got ${actual[i]} (expected array ${expected} got ${actual})`;
+		}
+	}
+}
+
+function same_value(x, y) {
+	if (y !== y) {
+		//NaN case
+		return x !== x;
+	}
+	if (x === 0 && y === 0) {
+		//Distinguish +0 and -0
+		return 1 / x === 1 / y;
+	}
+	return x === y;
+}
