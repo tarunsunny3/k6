@@ -3,6 +3,10 @@ package modulestest
 
 import (
 	"context"
+	"embed"
+	"fmt"
+	"github.com/stretchr/testify/require"
+	"io/fs"
 	"net/url"
 	"testing"
 
@@ -79,7 +83,7 @@ func (r *Runtime) SetupModuleSystemFromAnother(another *Runtime) error {
 // It is meant as a helper to test code that is expected to be run on the event loop, such
 // as code that returns a promise.
 //
-// A typical usage is to facilitate writing tests for asynchrounous code:
+// A typical usage is to facilitate writing tests for asynchrounous code:
 //
 //	func TestSomething(t *testing.T) {
 //	    runtime := modulestest.NewRuntime(t)
@@ -106,4 +110,36 @@ func (r *Runtime) innerSetupModuleSystem() error {
 	ms := modules.NewModuleSystem(r.mr, r.VU)
 	impl := modules.NewLegacyRequireImpl(r.VU, ms, url.URL{})
 	return r.VU.RuntimeField.Set("require", impl.Require)
+}
+
+//go:embed wptutils/*
+var wptutils embed.FS
+
+// NewRuntimeForWPT will create a new test runtime like NewRuntime, but ready to be used
+// for Web Platform Tests (https://github.com/web-platform-tests/wpt).
+func NewRuntimeForWPT(t testing.TB) *Runtime {
+	var err error
+	runtime := NewRuntime(t)
+
+	// We compile the Web Platform Tests harness scripts into a goja.Program,
+	// and execute them in the goja runtime in order to make the Web Platform
+	// assertion functions available to the tests.
+	files, err := fs.ReadDir(wptutils, "wptutils")
+	require.NoError(t, err)
+
+	for _, file := range files {
+		// Skip directories for safety,
+		// as we expect all files to be present in the root.
+		if file.IsDir() {
+			continue
+		}
+
+		program, err := CompileFileFromFS(wptutils, fmt.Sprintf("wptutils/%s", file.Name()))
+		require.NoError(t, err)
+
+		_, err = runtime.VU.Runtime().RunProgram(program)
+		require.NoError(t, err)
+	}
+
+	return runtime
 }
