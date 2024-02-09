@@ -17,12 +17,7 @@ func Test(t *testing.T) {
 	ts := newConfiguredRuntime(t)
 
 	gotErr := ts.EventLoop.Start(func() error {
-		err := executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "test.js")
-		require.NoError(t, err)
-
-		_, err = ts.VU.Runtime().RunString(`run_test()`)
-
-		return err
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "test.js")
 	})
 
 	assert.NoError(t, gotErr)

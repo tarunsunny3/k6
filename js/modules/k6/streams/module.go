@@ -71,7 +71,7 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	// is rather unclear at the moment...
 
 	var strategy QueuingStrategy
-	if len(call.Arguments) > 1 {
+	if len(call.Arguments) > 1 && !call.Arguments[1].Equals(goja.Undefined()) {
 		var err error
 		strategy, err = NewQueuingStrategyFrom(runtime, call.Arguments[1].ToObject(runtime))
 		if err != nil {

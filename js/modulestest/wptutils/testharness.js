@@ -10,6 +10,24 @@
 // The original testharness.js implementation is available at:
 // https://github.com/web-platform-tests/wpt/blob/3a3453c62176c97ab51cd492553c2dacd24366b1/resources/testharness.js
 
+/**
+ * Utility functions.
+ */
+function test(func, name)
+{
+	try {
+		func();
+	} catch(e) {
+		throw `${name} failed - ${e}`;
+	}
+}
+
+function promise_test(func, name)
+{
+	func().catch((e) => {
+		throw `${name} failed - ${e}`;
+	});
+}
 
 /**
  * Assert that ``actual`` is the same value as ``expected``.
