@@ -23,6 +23,18 @@ func Test(t *testing.T) {
 	assert.NoError(t, gotErr)
 }
 
+func TestConstructor(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "constructor.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
+
 func newConfiguredRuntime(t testing.TB) *modulestest.Runtime {
 	var err error
 	runtime := modulestest.NewRuntimeForWPT(t)

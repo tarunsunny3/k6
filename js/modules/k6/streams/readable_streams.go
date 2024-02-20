@@ -144,11 +144,7 @@ func (stream *ReadableStream) setupReadableByteStreamControllerFromUnderlyingSou
 ) {
 }
 
-func (stream *ReadableStream) setupDefaultControllerFromUnderlyingSource(
-	underlyingSource UnderlyingSource,
-	highWaterMark float64,
-	sizeAlgorithm SizeAlgorithm,
-) {
+func (stream *ReadableStream) setupDefaultControllerFromUnderlyingSource(underlyingSource UnderlyingSource, highWaterMark float64, sizeAlgorithm SizeAlgorithm) {
 	// 1. Let controller be a new ReadableStreamDefaultController.
 	controller := &ReadableStreamDefaultController{}
 	// 2. Let startAlgorithm be an algorithm that returns undefined.

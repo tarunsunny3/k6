@@ -33,8 +33,8 @@ type QueuingStrategy struct {
 type QueuingStrategyBase struct{}
 
 // NewQueuingStrategyFrom creates a new queuing strategy from the given goja object.
-func NewQueuingStrategyFrom(rt *goja.Runtime, obj *goja.Object) (QueuingStrategy, error) {
-	strategy := QueuingStrategy{}
+func NewQueuingStrategyFrom(rt *goja.Runtime, obj *goja.Object) (*QueuingStrategy, error) {
+	strategy := &QueuingStrategy{}
 
 	if common.IsNullish(obj) {
 		// If the user didn't provide a queuing strategy, use the default one.
@@ -42,7 +42,7 @@ func NewQueuingStrategyFrom(rt *goja.Runtime, obj *goja.Object) (QueuingStrategy
 	}
 
 	if err := rt.ExportTo(obj, strategy); err != nil {
-		return QueuingStrategy{}, newError(TypeError, "invalid queuing strategy object")
+		return nil, newError(TypeError, "invalid queuing strategy object")
 	}
 
 	if !common.IsNullish(obj.Get("highWaterMark")) {
@@ -85,8 +85,8 @@ func (qs *QueuingStrategy) extractSizeAlgorithm() SizeAlgorithm {
 // so far, waiting until this number reaches a specified high-water mark.
 //
 // See https://streams.spec.whatwg.org/#count-queuing-strategy.
-func NewCountQueuingStrategy(highWaterMark float64) QueuingStrategy {
-	return QueuingStrategy{
+func NewCountQueuingStrategy(highWaterMark float64) *QueuingStrategy {
+	return &QueuingStrategy{
 		HighWaterMark: highWaterMark,
 
 		// The default size function returns 1 for any chunk.

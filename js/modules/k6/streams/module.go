@@ -55,30 +55,30 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	runtime := mi.vu.Runtime()
 	var err error
 
-	// 1.
-	var underlyingSource UnderlyingSource
-	if len(call.Arguments) > 0 {
-		firstArgObj := call.Arguments[0].ToObject(runtime)
+	var underlyingSource *UnderlyingSource
+	var strategy *QueuingStrategy
 
-		// 2.
-		underlyingSource, err = NewUnderlyingSourceFromObject(runtime, firstArgObj)
-		if err != nil {
-			common.Throw(runtime, newError(TypeError, "invalid UnderlyingSource object passed to ReadableStream constructor"))
-		}
-	}
-	// FIXME: should we have an else, in case the argument is not provided here?
-	// Because what should happen if underlyingSource is null as described in the spec? this
-	// is rather unclear at the moment...
-
-	var strategy QueuingStrategy
-	if len(call.Arguments) > 1 && !call.Arguments[1].Equals(goja.Undefined()) {
-		var err error
+	// We look for the queuing strategy first, and validate it before
+	// the underlying source, in order to pass the Web Platform Tests
+	// constructor tests.
+	if len(call.Arguments) > 1 && !common.IsNullish(call.Arguments[1]) {
 		strategy, err = NewQueuingStrategyFrom(runtime, call.Arguments[1].ToObject(runtime))
 		if err != nil {
 			common.Throw(runtime, err)
 		}
 	} else {
 		strategy = NewCountQueuingStrategy(1)
+	}
+
+	if len(call.Arguments) > 0 && !common.IsNullish(call.Arguments[0]) {
+		// 2.
+		underlyingSource, err = NewUnderlyingSourceFromObject(runtime, call.Arguments[0].ToObject(runtime))
+		if err != nil {
+			common.Throw(runtime, err)
+		}
+	} else {
+		// 1.
+		underlyingSource = nil
 	}
 
 	// 3.
@@ -88,23 +88,31 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	}
 	stream.initialize()
 
-	// 4.
-	if underlyingSource.Type == ReadableStreamTypeBytes {
+	if underlyingSource != nil && underlyingSource.Type == "bytes" { // 4.
+		// 4.1
 		if strategy.Size != nil {
 			common.Throw(runtime, newError(RangeError, "size function must not be set for byte streams"))
 		}
 
+		// 4.2
 		highWaterMark := strategy.extractHighWaterMark(0)
 
-		stream.setupReadableByteStreamControllerFromUnderlyingSource(underlyingSource, highWaterMark)
+		// 4.3
+		stream.setupReadableByteStreamControllerFromUnderlyingSource(*underlyingSource, highWaterMark)
 	} else { // 5.
-		if underlyingSource.Type != "" {
+		// 5.1
+		if underlyingSource != nil && underlyingSource.Type != "" {
 			common.Throw(runtime, newError(AssertionError, "type must not be set for non-byte streams"))
 		}
 
+		// 5.2
 		sizeAlgorithm := strategy.extractSizeAlgorithm()
+
+		// 5.3
 		highWaterMark := strategy.extractHighWaterMark(1)
-		stream.setupDefaultControllerFromUnderlyingSource(underlyingSource, highWaterMark, sizeAlgorithm)
+
+		// 5.4
+		stream.setupDefaultControllerFromUnderlyingSource(*underlyingSource, highWaterMark, sizeAlgorithm)
 	}
 
 	return runtime.ToValue(stream).ToObject(runtime)

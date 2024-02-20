@@ -74,8 +74,8 @@ type UnderlyingSourcePullCallback func(controller ReadableStreamController) *goj
 type UnderlyingSourceCancelCallback func(reason any) *goja.Promise
 
 // NewUnderlyingSourceFromObject creates a new UnderlyingSource from a goja.Object.
-func NewUnderlyingSourceFromObject(rt *goja.Runtime, obj *goja.Object) (UnderlyingSource, error) {
-	var underlyingSource UnderlyingSource
+func NewUnderlyingSourceFromObject(rt *goja.Runtime, obj *goja.Object) (*UnderlyingSource, error) {
+	var underlyingSource *UnderlyingSource
 
 	if common.IsNullish(obj) {
 		// If the user didn't provide a underlying source, use the default one.
