@@ -47,6 +47,17 @@ func TestBadStrategies(t *testing.T) {
 	assert.NoError(t, gotErr)
 }
 
+func TestBadUnderlyingSources(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "bad-underlying-sources.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
 func newConfiguredRuntime(t testing.TB) *modulestest.Runtime {
 	var err error
 	runtime := modulestest.NewRuntimeForWPT(t)
