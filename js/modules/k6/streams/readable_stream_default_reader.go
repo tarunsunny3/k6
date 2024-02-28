@@ -15,6 +15,35 @@ type ReadableStreamDefaultReader struct {
 	readRequests []ReadRequest
 }
 
+// NewReadableStreamDefaultReaderObject creates a new goja.Object from a [ReadableStreamDefaultReader] instance.
+func NewReadableStreamDefaultReaderObject(reader *ReadableStreamDefaultReader) (*goja.Object, error) {
+	rt := reader.stream.runtime
+	obj := rt.NewObject()
+
+	err := obj.DefineAccessorProperty("closed", rt.ToValue(func() *goja.Promise {
+		p, _, _ := reader.GetClosed()
+		return p
+	}), nil, goja.FLAG_FALSE, goja.FLAG_TRUE)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := setReadOnlyPropertyOf(obj, "cancel", rt.ToValue(reader.Cancel)); err != nil {
+		return nil, err
+	}
+
+	// Exposing the properties of the [ReadableStreamDefaultReader] interface
+	if err := setReadOnlyPropertyOf(obj, "read", rt.ToValue(reader.Read)); err != nil {
+		return nil, err
+	}
+
+	if err := setReadOnlyPropertyOf(obj, "releaseLock", rt.ToValue(reader.ReleaseLock)); err != nil {
+		return nil, err
+	}
+
+	return obj, nil
+}
+
 // Ensure the ReadableStreamReader interface is implemented correctly
 var _ ReadableStreamReader = &ReadableStreamDefaultReader{}
 

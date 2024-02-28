@@ -1,6 +1,8 @@
 package streams
 
 import (
+	"fmt"
+
 	"github.com/dop251/goja"
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
@@ -208,6 +210,14 @@ func isTypedArray(rt *goja.Runtime, v goja.Value) bool {
 	return isInstanceOf(rt, asObject, typedArrayTypes...)
 }
 
+// isNumber returns true if the given goja value holds a number
+func isNumber(value goja.Value) bool {
+	_, isFloat := value.Export().(float64)
+	_, isInt := value.Export().(int64)
+
+	return isFloat || isInt
+}
+
 // JSType is a string representing a JavaScript type
 type JSType string
 
@@ -270,19 +280,33 @@ func isInstanceOf(rt *goja.Runtime, v goja.Value, instanceOf ...JSType) bool {
 // isNonNegativeNumber implements the [IsNonNegativeNumber] algorithm.
 //
 // [IsNonNegativeNumber]: https://streams.spec.whatwg.org/#is-non-negative-number
-func isNonNegativeNumber(rt *goja.Runtime, value goja.Value) bool {
+func isNonNegativeNumber(value goja.Value) bool {
 	if common.IsNullish(value) {
 		return false
 	}
 
-	var i int64
-	if err := rt.ExportTo(value, &i); err != nil {
+	if !isNumber(value) {
 		return false
 	}
 
-	if i < 0 {
+	if value.ToFloat() < 0 || value.ToInteger() < 0 {
 		return false
 	}
 
 	return true
+}
+
+// setReadOnlyPropertyOf sets a read-only property on the given [goja.Object].
+func setReadOnlyPropertyOf(obj *goja.Object, name string, value goja.Value) error {
+	err := obj.DefineDataProperty(name,
+		value,
+		goja.FLAG_FALSE,
+		goja.FLAG_FALSE,
+		goja.FLAG_TRUE,
+	)
+	if err != nil {
+		return fmt.Errorf("unable to define %s read-only property on TextEncoder object; reason: %w", name, err)
+	}
+
+	return nil
 }

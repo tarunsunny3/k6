@@ -3,7 +3,6 @@ package streams
 import (
 	"github.com/dop251/goja"
 	"go.k6.io/k6/js/common"
-	"go.k6.io/k6/js/promises"
 )
 
 // ReadableStreamReader is the interface implemented by all readable stream readers.
@@ -130,22 +129,18 @@ func ReadableStreamReaderGenericInitialize(reader ReadableStreamGenericReader, s
 	stream.reader = reader
 
 	// 3.
-	promise, resolve, reject := promises.New(stream.vu)
+	promise, resolve, reject := stream.runtime.NewPromise()
+
 	switch stream.state {
 	case ReadableStreamStateReadable:
-		break
 	case ReadableStreamStateClosed:
-		go func() {
-			resolve(goja.Undefined())
-		}()
+		resolve(goja.Undefined())
 	default:
 		if stream.state != ReadableStreamStateErrored {
 			common.Throw(stream.vu.Runtime(), newError(AssertionError, "stream.state is not \"errored\""))
 		}
 
-		go func() {
-			reject(stream.storedError)
-		}()
+		reject(stream.storedError)
 	}
 
 	reader.SetClosed(promise, resolve, reject)

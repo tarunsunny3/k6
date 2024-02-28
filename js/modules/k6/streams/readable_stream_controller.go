@@ -8,7 +8,7 @@ import "github.com/dop251/goja"
 type ReadableStreamController interface {
 	Close()
 	Enqueue(chunk goja.Value)
-	Error(err error)
+	Error(err goja.Value)
 
 	// cancelSteps performs the controller’s steps that run in reaction to
 	// the stream being canceled, used to clean up the state stored in the
@@ -26,4 +26,5 @@ type ReadableStreamController interface {
 }
 
 // SizeAlgorithm is a function that returns the size of a chunk.
-type SizeAlgorithm func(chunk goja.Value) (float64, error)
+// type SizeAlgorithm func(chunk goja.Value) (float64, error)
+type SizeAlgorithm = goja.Callable

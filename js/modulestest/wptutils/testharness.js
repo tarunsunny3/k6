@@ -203,6 +203,121 @@ function assert_throws_exactly_impl(exception, func, description,
 	}
 }
 
+/**
+ * Assert that a Promise is rejected with the provided value.
+ *
+ * @param {Test} test - the `Test` to use for the assertion.
+ * @param {Any} exception - The expected value of the rejected promise.
+ * @param {Promise} promise - The promise that's expected to
+ * reject.
+ * @param {string} [description] Error message to add to assert in case of
+ *                               failure.
+ */
+function promise_rejects_exactly(test, exception, promise, description) {
+	return promise.then(
+		() => {
+			throw new Error("Should have rejected: " + description);
+		},
+		(e) => {
+			assert_throws_exactly_impl(exception, function() { throw e},
+				description, "promise_rejects_exactly");
+		}
+	);
+}
+
+/**
+ * Assert a JS Error with the expected constructor is thrown.
+ *
+ * @param {object} constructor The expected exception constructor.
+ * @param {Function} func Function which should throw.
+ * @param {string} [description] Error description for the case that the error is not thrown.
+ */
+function assert_throws_js(constructor, func, description)
+{
+	assert_throws_js_impl(constructor, func, description,
+		"assert_throws_js");
+}
+
+/**
+ * Like assert_throws_js but allows specifying the assertion type
+ * (assert_throws_js or promise_rejects_js, in practice).
+ */
+function assert_throws_js_impl(constructor, func, description,
+							   assertion_type)
+{
+	try {
+		func.call(this);
+		assert(false, assertion_type, description,
+			"${func} did not throw", {func:func});
+	} catch (e) {
+		if (e instanceof AssertionError) {
+			throw e;
+		}
+
+		// Basic sanity-checks on the thrown exception.
+		assert(typeof e === "object",
+			assertion_type, description,
+			"${func} threw ${e} with type ${type}, not an object",
+			{func:func, e:e, type:typeof e});
+
+		assert(e !== null,
+			assertion_type, description,
+			"${func} threw null, not an object",
+			{func:func});
+
+		// Note @oleiade: As k6 does not throw error objects that match the Javascript
+		// standard errors and their associated expectations and properties, we cannot
+		// rely on the WPT assertions to be true.
+		//
+		// Instead, we check that the error object has the shape we give it when we throw it.
+		// Namely that it has a name property that matches the name of the expected constructor.
+		assert('value' in e,
+			assertion_type, description,
+			"${func} threw ${e} without a value property",
+			{func:func, e:e});
+
+		assert('name' in e.value,
+			assertion_type, description,
+			"${func} threw ${e} without a name property",
+			{func:func, e:e});
+
+		assert(e.value.name === constructor.name,
+			assertion_type, description,
+			"${func} threw ${e} with name ${e.name}, not ${constructor.name}",
+			{func:func, e:e, constructor:constructor});
+
+		// Note @oleiade: We deactivated the following assertions in favor of our own
+		// as mentioned above.
+
+		// Basic sanity-check on the passed-in constructor
+		// assert(typeof constructor == "function",
+		// 	assertion_type, description,
+		// 	"${constructor} is not a constructor",
+		// 	{constructor:constructor});
+		// var obj = constructor;
+		// while (obj) {
+		// 	if (typeof obj === "function" &&
+		// 		obj.name === "Error") {
+		// 		break;
+		// 	}
+		// 	obj = Object.getPrototypeOf(obj);
+		// }
+		// assert(obj != null,
+		// 	assertion_type, description,
+		// 	"${constructor} is not an Error subtype",
+		// 	{constructor:constructor});
+		//
+		// // And checking that our exception is reasonable
+		// assert(e.constructor === constructor &&
+		// 	e.name === constructor.name,
+		// 	assertion_type, description,
+		// 	"${func} threw ${actual} (${actual_name}) expected instance of ${expected} (${expected_name})",
+		// 	{func:func, actual:e, actual_name:e.name,
+		// 		expected:constructor,
+		// 		expected_name:constructor.name});
+	}
+}
+
 function same_value(x, y) {
 	if (y !== y) {
 		//NaN case

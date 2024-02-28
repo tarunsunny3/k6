@@ -236,7 +236,7 @@ func (controller *ReadableByteStreamController) Enqueue(chunk goja.Value) {
 // Error implements the [specification]'s ReadableByteStreamController error(e) algorithm.
 //
 // [specification]: https://streams.spec.whatwg.org/#rbs-controller-error
-func (controller *ReadableByteStreamController) Error(err error) {
+func (controller *ReadableByteStreamController) Error(err goja.Value) {
 	// 1.
 	stream := controller.stream
 

@@ -56,18 +56,15 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	var err error
 
 	var underlyingSource *UnderlyingSource
-	var strategy *QueuingStrategy
+	var strategy *goja.Object
 
 	// We look for the queuing strategy first, and validate it before
 	// the underlying source, in order to pass the Web Platform Tests
 	// constructor tests.
 	if len(call.Arguments) > 1 && !common.IsNullish(call.Arguments[1]) {
-		strategy, err = NewQueuingStrategyFrom(runtime, call.Arguments[1].ToObject(runtime))
-		if err != nil {
-			common.Throw(runtime, err)
-		}
+		strategy = call.Arguments[1].ToObject(runtime)
 	} else {
-		strategy = NewCountQueuingStrategy(1)
+		strategy = NewCountQueuingStrategy(runtime, goja.ConstructorCall{Arguments: []goja.Value{runtime.ToValue(1)}})
 	}
 
 	if len(call.Arguments) > 0 && !common.IsNullish(call.Arguments[0]) {
@@ -90,12 +87,13 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 
 	if underlyingSource != nil && underlyingSource.Type == "bytes" { // 4.
 		// 4.1
-		if strategy.Size != nil {
+		if strategy.Get("size") != nil {
 			common.Throw(runtime, newError(RangeError, "size function must not be set for byte streams"))
 		}
 
 		// 4.2
-		highWaterMark := strategy.extractHighWaterMark(0)
+		// highWaterMark := strategy.extractHighWaterMark(0)
+		highWaterMark := extractHighWaterMark(runtime, strategy, 0)
 
 		// 4.3
 		stream.setupReadableByteStreamControllerFromUnderlyingSource(*underlyingSource, highWaterMark)
@@ -106,14 +104,78 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 		}
 
 		// 5.2
-		sizeAlgorithm := strategy.extractSizeAlgorithm()
+		sizeAlgorithm := extractSizeAlgorithm(runtime, strategy)
 
 		// 5.3
-		highWaterMark := strategy.extractHighWaterMark(1)
+		highWaterMark := extractHighWaterMark(runtime, strategy, 1)
 
 		// 5.4
 		stream.setupDefaultControllerFromUnderlyingSource(*underlyingSource, highWaterMark, sizeAlgorithm)
 	}
 
 	return runtime.ToValue(stream).ToObject(runtime)
+}
+
+// NewCountQueuingStrategy is the constructor for the CountQueuingStrategy object.
+func NewCountQueuingStrategy(rt *goja.Runtime, call goja.ConstructorCall) *goja.Object {
+	obj := rt.NewObject()
+
+	if len(call.Arguments) != 1 {
+		common.Throw(rt, newError(TypeError, "CountQueuingStrategy takes a single argument"))
+	}
+
+	highWaterMark := call.Argument(0)
+	if err := setReadOnlyPropertyOf(obj, "highWaterMark", highWaterMark); err != nil {
+		common.Throw(rt, newError(TypeError, err.Error()))
+	}
+
+	sizeFunc := func(_ goja.Value) (float64, error) { return 1.0, nil }
+	if err := setReadOnlyPropertyOf(obj, "size", rt.ToValue(sizeFunc)); err != nil {
+		common.Throw(rt, newError(TypeError, err.Error()))
+	}
+
+	return obj
+}
+
+// extractHighWaterMark returns the high water mark for the given queuing strategy.
+//
+// It implements the [ExtractHighWaterMark] algorithm.
+//
+// [ExtractHighWaterMark]: https://streams.spec.whatwg.org/#validate-and-normalize-high-water-mark
+func extractHighWaterMark(rt *goja.Runtime, strategy *goja.Object, defaultHWM float64) float64 {
+	highWaterMark := strategy.Get("highWaterMark")
+
+	// 1.
+	if common.IsNullish(highWaterMark) {
+		return defaultHWM
+	}
+
+	// 2. 3.
+	if goja.IsNaN(highWaterMark) || !isNumber(highWaterMark) || !isNonNegativeNumber(highWaterMark) {
+		common.Throw(rt, newError(RangeError, "highWaterMark must be a non-negative number"))
+	}
+
+	return highWaterMark.ToFloat()
+}
+
+// extractSizeAlgorithm returns the size algorithm for the given queuing strategy.
+//
+// It implements the [ExtractSizeAlgorithm] algorithm.
+//
+// [ExtractSizeAlgorithm]: https://streams.spec.whatwg.org/#make-size-algorithm-from-size-function
+func extractSizeAlgorithm(rt *goja.Runtime, strategy *goja.Object) SizeAlgorithm {
+	var sizeFunc goja.Callable
+	sizeProp := strategy.Get("size")
+
+	if common.IsNullish(sizeProp) {
+		sizeFunc, _ = goja.AssertFunction(rt.ToValue(func(_ goja.Value) (float64, error) { return 1.0, nil }))
+		return sizeFunc
+	}
+
+	sizeFunc, isFunc := goja.AssertFunction(sizeProp)
+	if !isFunc {
+		common.Throw(rt, newError(TypeError, "size must be a function"))
+	}
+
+	return sizeFunc
 }

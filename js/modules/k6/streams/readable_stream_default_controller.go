@@ -90,7 +90,7 @@ func (controller *ReadableStreamDefaultController) Enqueue(chunk goja.Value) {
 
 	// 2.
 	if err := controller.enqueue(chunk); err != nil {
-		common.Throw(controller.stream.vu.Runtime(), newError(RuntimeError, err.Error()))
+		common.Throw(controller.stream.vu.Runtime(), err)
 	}
 }
 
@@ -100,7 +100,8 @@ func (controller *ReadableStreamDefaultController) Enqueue(chunk goja.Value) {
 // It implements the ReadableStreamDefaultController.error(e) [specification] algorithm.
 //
 // [specification]: https://streams.spec.whatwg.org/#rs-default-controller-error
-func (controller *ReadableStreamDefaultController) Error(_ error) {
+func (controller *ReadableStreamDefaultController) Error(err goja.Value) {
+	controller.error(err)
 }
 
 // cancelSteps performs the controller’s steps that run in reaction to
@@ -211,13 +212,13 @@ func (controller *ReadableStreamDefaultController) enqueue(chunk goja.Value) err
 		stream.fulfillReadRequest(chunk, false)
 	} else {
 		// 4.1.
-		result, err := controller.strategySizeAlgorithm(chunk)
+		size, err := controller.strategySizeAlgorithm(goja.Undefined(), chunk)
 		if err != nil { // If result is an abrupt completion
 			controller.error(err)
 			return err
 		}
 
-		err = controller.queue.Enqueue(chunk, result)
+		err = controller.queue.Enqueue(chunk, size.ToFloat())
 		if err != nil {
 			controller.error(err)
 			return err

@@ -38,12 +38,6 @@ type ReadableStream struct {
 	// storedError holds the error that caused the stream to be errored
 	storedError any
 
-	// underlyingSource holds the underlying source of the stream
-	// underlyingSource *UnderlyingSource
-
-	// queuingStrategy holds the queuing strategy of the stream
-	// queuingStrategy *QueuingStrategy
-
 	runtime *goja.Runtime
 	vu      modules.VU
 }
@@ -81,7 +75,13 @@ func (stream *ReadableStream) Cancel(reason goja.Value) *goja.Promise {
 func (stream *ReadableStream) GetReader(options *goja.Object) goja.Value {
 	// 1. If options["mode"] does not exist, return ? AcquireReadableStreamDefaultReader(this).
 	if options == nil || common.IsNullish(options) || common.IsNullish(options.Get("mode")) {
-		return stream.runtime.ToValue(stream.acquireDefaultReader())
+		defaultReader := stream.acquireDefaultReader()
+		defaultReaderObj, err := NewReadableStreamDefaultReaderObject(defaultReader)
+		if err != nil {
+			common.Throw(stream.runtime, err)
+		}
+
+		return defaultReaderObj
 	}
 
 	// 2. Assert: options["mode"] is "byob".
@@ -321,13 +321,14 @@ func (stream *ReadableStream) setupBYOBReader(reader *ReadableStreamBYOBReader) 
 	reader.readIntoRequests = []ReadIntoRequest{}
 }
 
+// acquireDefaultReader implements the specification's [AcquireReadableStreamDefaultReader] algorithm.
+//
+// [AcquireReadableStreamDefaultReader]: https://streams.spec.whatwg.org/#acquire-readable-stream-default-reader
 func (stream *ReadableStream) acquireDefaultReader() *ReadableStreamDefaultReader {
 	// 1. let reader b a new ReadableStreamDefaultReader
-	// reader := NewReadableStreamDefaultReader(stream)
 	reader := &ReadableStreamDefaultReader{}
 
 	// 2.
-	// stream.setupDefaultReader(reader)
 	reader.setup(stream)
 
 	// 3.

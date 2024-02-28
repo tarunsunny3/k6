@@ -35,6 +35,18 @@ func TestConstructor(t *testing.T) {
 	assert.NoError(t, gotErr)
 }
 
+func TestBadStrategies(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "bad-strategies.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
+
 func newConfiguredRuntime(t testing.TB) *modulestest.Runtime {
 	var err error
 	runtime := modulestest.NewRuntimeForWPT(t)
