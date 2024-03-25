@@ -46,7 +46,8 @@ func (rm *RootModule) NewModuleInstance(vu modules.VU) modules.Instance {
 // Exports returns the module exports, that will be available in the runtime.
 func (mi *ModuleInstance) Exports() modules.Exports {
 	return modules.Exports{Named: map[string]interface{}{
-		"ReadableStream": mi.NewReadableStream,
+		"ReadableStream":       mi.NewReadableStream,
+		"CountQueuingStrategy": mi.NewCountQueuingStrategy,
 	}}
 }
 
@@ -61,11 +62,7 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	// We look for the queuing strategy first, and validate it before
 	// the underlying source, in order to pass the Web Platform Tests
 	// constructor tests.
-	if len(call.Arguments) > 1 && !common.IsNullish(call.Arguments[1]) {
-		strategy = call.Arguments[1].ToObject(runtime)
-	} else {
-		strategy = NewCountQueuingStrategy(runtime, goja.ConstructorCall{Arguments: []goja.Value{runtime.ToValue(1)}})
-	}
+	strategy = mi.initializeStrategy(call)
 
 	if len(call.Arguments) > 0 && !common.IsNullish(call.Arguments[0]) {
 		// 2.
@@ -116,21 +113,85 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	return runtime.ToValue(stream).ToObject(runtime)
 }
 
-// NewCountQueuingStrategy is the constructor for the CountQueuingStrategy object.
-func NewCountQueuingStrategy(rt *goja.Runtime, call goja.ConstructorCall) *goja.Object {
+func (mi *ModuleInstance) initializeStrategy(call goja.ConstructorCall) *goja.Object {
+	runtime := mi.vu.Runtime()
+
+	// We first check if there's a user-specified underlying source, and whether its type is "bytes".
+	// If so, we'll take it into account when initializing the strategy.
+	var underlyingSourceIsBytes bool
+	if len(call.Arguments) > 0 && !common.IsNullish(call.Arguments[0]) {
+		srcObj := call.Arguments[0].ToObject(runtime)
+		if !common.IsNullish(srcObj.Get("type")) && srcObj.Get("type").String() == ReadableStreamTypeBytes {
+			underlyingSourceIsBytes = true
+		}
+	}
+
+	// Now, we proceed to initialize the strategy.
+	var (
+		scall    goja.ConstructorCall
+		strategy *goja.Object
+	)
+
+	if len(call.Arguments) > 1 && !common.IsNullish(call.Arguments[1]) {
+		scall = goja.ConstructorCall{Arguments: []goja.Value{call.Arguments[1]}}
+		strategy = mi.newCountQueuingStrategy(runtime, scall, !underlyingSourceIsBytes)
+	} else {
+		defaultStrategy := runtime.NewObject()
+		if err := defaultStrategy.Set("highWaterMark", 1); err != nil {
+			common.Throw(runtime, newError(RuntimeError, err.Error()))
+		}
+
+		scall = goja.ConstructorCall{Arguments: []goja.Value{defaultStrategy}}
+		strategy = mi.newCountQueuingStrategy(runtime, scall, !underlyingSourceIsBytes)
+	}
+
+	return strategy
+}
+
+// NewCountQueuingStrategy is the constructor for the [CountQueuingStrategy] object.
+//
+// [CountQueuingStrategy]: https://streams.spec.whatwg.org/#cqs-class
+func (mi *ModuleInstance) NewCountQueuingStrategy(rt *goja.Runtime, call goja.ConstructorCall) *goja.Object {
+	// By default, the CountQueuingStrategy has the 'size' property.
+	return mi.newCountQueuingStrategy(rt, call, true)
+}
+
+// newCountQueuingStrategy is the underlying constructor for the [CountQueuingStrategy] object.
+//
+// It allows to create a CountQueuingStrategy with or without the 'size' property,
+// depending on how the containing ReadableStream is initialized.
+func (mi *ModuleInstance) newCountQueuingStrategy(rt *goja.Runtime, call goja.ConstructorCall, withSize bool) *goja.Object {
 	obj := rt.NewObject()
 
 	if len(call.Arguments) != 1 {
 		common.Throw(rt, newError(TypeError, "CountQueuingStrategy takes a single argument"))
 	}
 
-	highWaterMark := call.Argument(0)
+	if !isObject(call.Argument(0)) {
+		common.Throw(rt, newError(TypeError, "CountQueuingStrategy argument must be an object"))
+	}
+
+	argObj := call.Argument(0).ToObject(rt)
+	if common.IsNullish(argObj.Get("highWaterMark")) {
+		common.Throw(rt, newError(TypeError, "CountQueuingStrategy argument must have 'highWaterMark' property"))
+	}
+
+	highWaterMark := argObj.Get("highWaterMark")
 	if err := setReadOnlyPropertyOf(obj, "highWaterMark", highWaterMark); err != nil {
 		common.Throw(rt, newError(TypeError, err.Error()))
 	}
 
-	sizeFunc := func(_ goja.Value) (float64, error) { return 1.0, nil }
-	if err := setReadOnlyPropertyOf(obj, "size", rt.ToValue(sizeFunc)); err != nil {
+	var err error
+	// By default, we set the given 'size', if any.
+	if !common.IsNullish(argObj.Get("size")) {
+		err = setReadOnlyPropertyOf(obj, "size", argObj.Get("size"))
+		// Otherwise, we set the default size function, when needed.
+	} else if withSize {
+		sizeFunc := func(_ goja.Value) (float64, error) { return 1.0, nil }
+		err = setReadOnlyPropertyOf(obj, "size", rt.ToValue(sizeFunc))
+	}
+
+	if err != nil {
 		common.Throw(rt, newError(TypeError, err.Error()))
 	}
 
