@@ -49,14 +49,164 @@ AssertionError.prototype = Object.create(Error.prototype);
 function assert(expected_true, function_name, description, error, substitutions)
 {
 	if (expected_true !== true) {
-		// NOTE: This is a simplified version of the original implementation
-		// found at: https://github.com/web-platform-tests/wpt/blob/e955fbc72b5a98e1c2dc6a6c1a048886c8a99785/resources/testharness.js#L4622
-		// var msg = make_message(function_name, description,
-		// 	error, substitutions);
-		var msg = `${function_name}: ${description} ${error}`;
-
+		var msg = make_message(function_name, description,
+			error, substitutions);
 		throw new AssertionError(msg);
 	}
+}
+
+
+// NOTE: This is a simplified version of the original implementation
+// found at: https://github.com/web-platform-tests/wpt/blob/e955fbc72b5a98e1c2dc6a6c1a048886c8a99785/resources/testharness.js#L4615
+function make_message(function_name, description, error, substitutions)
+{
+	// for (var p in substitutions) {
+	// 	if (substitutions.hasOwnProperty(p)) {
+	// 		substitutions[p] = format_value(substitutions[p]);
+	// 	}
+	// }
+	var node_form = substitute(["{text}", "${function_name}: ${description}" + error],
+		merge({function_name:function_name,
+				description:(description?description + " ":"")},
+			substitutions));
+	return node_form.slice(1).join("");
+}
+
+function is_single_node(template)
+{
+	return typeof template[0] === "string";
+}
+
+function substitute(template, substitutions)
+{
+	if (typeof template === "function") {
+		var replacement = template(substitutions);
+		if (!replacement) {
+			return null;
+		}
+
+		return substitute(replacement, substitutions);
+	}
+
+	if (is_single_node(template)) {
+		return substitute_single(template, substitutions);
+	}
+
+	return filter(map(template, function(x) {
+		return substitute(x, substitutions);
+	}), function(x) {return x !== null;});
+}
+
+function substitute_single(template, substitutions)
+{
+	var substitution_re = /\$\{([^ }]*)\}/g;
+
+	function do_substitution(input) {
+		var components = input.split(substitution_re);
+		var rv = [];
+		for (var i = 0; i < components.length; i += 2) {
+			rv.push(components[i]);
+			if (components[i + 1]) {
+				rv.push(String(substitutions[components[i + 1]]));
+			}
+		}
+		return rv;
+	}
+
+	function substitute_attrs(attrs, rv)
+	{
+		rv[1] = {};
+		for (var name in template[1]) {
+			if (attrs.hasOwnProperty(name)) {
+				var new_name = do_substitution(name).join("");
+				var new_value = do_substitution(attrs[name]).join("");
+				rv[1][new_name] = new_value;
+			}
+		}
+	}
+
+	function substitute_children(children, rv)
+	{
+		for (var i = 0; i < children.length; i++) {
+			if (children[i] instanceof Object) {
+				var replacement = substitute(children[i], substitutions);
+				if (replacement !== null) {
+					if (is_single_node(replacement)) {
+						rv.push(replacement);
+					} else {
+						extend(rv, replacement);
+					}
+				}
+			} else {
+				extend(rv, do_substitution(String(children[i])));
+			}
+		}
+		return rv;
+	}
+
+	var rv = [];
+	rv.push(do_substitution(String(template[0])).join(""));
+
+	if (template[0] === "{text}") {
+		substitute_children(template.slice(1), rv);
+	} else {
+		substitute_attrs(template[1], rv);
+		substitute_children(template.slice(2), rv);
+	}
+
+	return rv;
+}
+
+function filter(array, callable, thisObj) {
+	var rv = [];
+	for (var i = 0; i < array.length; i++) {
+		if (array.hasOwnProperty(i)) {
+			var pass = callable.call(thisObj, array[i], i, array);
+			if (pass) {
+				rv.push(array[i]);
+			}
+		}
+	}
+	return rv;
+}
+
+function map(array, callable, thisObj)
+{
+	var rv = [];
+	rv.length = array.length;
+	for (var i = 0; i < array.length; i++) {
+		if (array.hasOwnProperty(i)) {
+			rv[i] = callable.call(thisObj, array[i], i, array);
+		}
+	}
+	return rv;
+}
+
+function extend(array, items)
+{
+	Array.prototype.push.apply(array, items);
+}
+
+function forEach(array, callback, thisObj)
+{
+	for (var i = 0; i < array.length; i++) {
+		if (array.hasOwnProperty(i)) {
+			callback.call(thisObj, array[i], i, array);
+		}
+	}
+}
+
+function merge(a,b)
+{
+	var rv = {};
+	var p;
+	for (p in a) {
+		rv[p] = a[p];
+	}
+	for (p in b) {
+		rv[p] = b[p];
+	}
+	return rv;
 }
 
 /**
