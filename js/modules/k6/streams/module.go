@@ -56,7 +56,8 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	runtime := mi.vu.Runtime()
 	var err error
 
-	var underlyingSource *UnderlyingSource
+	// 1. If underlyingSource is missing, set it to null.
+	var underlyingSource UnderlyingSource
 	var strategy *goja.Object
 
 	// We look for the queuing strategy first, and validate it before
@@ -64,50 +65,53 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	// constructor tests.
 	strategy = mi.initializeStrategy(call)
 
-	if len(call.Arguments) > 0 && !common.IsNullish(call.Arguments[0]) {
-		// 2.
+	// 2. Let underlyingSourceDict be underlyingSource, converted to an IDL value of type UnderlyingSource.
+	if len(call.Arguments) > 0 && !goja.IsUndefined(call.Arguments[0]) {
+		// We first assert that it is an object (requirement)
+		if !isObject(call.Arguments[0]) {
+			common.Throw(runtime, newError(TypeError, "underlyingSource must be an object"))
+		}
+
+		// Then we try to convert it to an UnderlyingSource
 		underlyingSource, err = NewUnderlyingSourceFromObject(runtime, call.Arguments[0].ToObject(runtime))
 		if err != nil {
 			common.Throw(runtime, err)
 		}
-	} else {
-		// 1.
-		underlyingSource = nil
 	}
 
-	// 3.
+	// 3. Perform ! InitializeReadableStream(this).
 	stream := &ReadableStream{
 		runtime: mi.vu.Runtime(),
 		vu:      mi.vu,
 	}
 	stream.initialize()
 
-	if underlyingSource != nil && underlyingSource.Type == "bytes" { // 4.
-		// 4.1
+	// 4. If underlyingSourceDict["type"] is "bytes":
+	if underlyingSource.Type == "bytes" {
+		// 4.1. If strategy["size"] exists, throw a RangeError exception.
 		if strategy.Get("size") != nil {
 			common.Throw(runtime, newError(RangeError, "size function must not be set for byte streams"))
 		}
 
-		// 4.2
-		// highWaterMark := strategy.extractHighWaterMark(0)
+		// 4.2. Let highWaterMark be ? ExtractHighWaterMark(strategy, 0).
 		highWaterMark := extractHighWaterMark(runtime, strategy, 0)
 
-		// 4.3
-		stream.setupReadableByteStreamControllerFromUnderlyingSource(*underlyingSource, highWaterMark)
-	} else { // 5.
-		// 5.1
-		if underlyingSource != nil && underlyingSource.Type != "" {
+		// 4.3. Perform ? SetUpReadableByteStreamControllerFromUnderlyingSource(this, underlyingSource, underlyingSourceDict, highWaterMark).
+		stream.setupReadableByteStreamControllerFromUnderlyingSource(underlyingSource, highWaterMark)
+	} else { // 5. Otherwise,
+		// 5.1. Assert: underlyingSourceDict["type"] does not exist.
+		if underlyingSource.Type != "" {
 			common.Throw(runtime, newError(AssertionError, "type must not be set for non-byte streams"))
 		}
 
-		// 5.2
+		// 5.2. Let sizeAlgorithm be ! ExtractSizeAlgorithm(strategy).
 		sizeAlgorithm := extractSizeAlgorithm(runtime, strategy)
 
-		// 5.3
+		// 5.3. Let highWaterMark be ? ExtractHighWaterMark(strategy, 1).
 		highWaterMark := extractHighWaterMark(runtime, strategy, 1)
 
-		// 5.4
-		stream.setupReadableStreamDefaultControllerFromUnderlyingSource(*underlyingSource, highWaterMark, sizeAlgorithm)
+		// 5.4. Perform ? SetUpReadableStreamDefaultControllerFromUnderlyingSource(this, underlyingSource, underlyingSourceDict, highWaterMark, sizeAlgorithm).
+		stream.setupReadableStreamDefaultControllerFromUnderlyingSource(underlyingSource, highWaterMark, sizeAlgorithm)
 	}
 
 	return runtime.ToValue(stream).ToObject(runtime)
@@ -197,18 +201,20 @@ func (mi *ModuleInstance) newCountQueuingStrategy(rt *goja.Runtime, call goja.Co
 //
 // [ExtractHighWaterMark]: https://streams.spec.whatwg.org/#validate-and-normalize-high-water-mark
 func extractHighWaterMark(rt *goja.Runtime, strategy *goja.Object, defaultHWM float64) float64 {
-	highWaterMark := strategy.Get("highWaterMark")
-
-	// 1.
-	if common.IsNullish(highWaterMark) {
+	// 1. If strategy["highWaterMark"] does not exist, return defaultHWM.
+	if common.IsNullish(strategy.Get("highWaterMark")) {
 		return defaultHWM
 	}
 
-	// 2. 3.
-	if goja.IsNaN(highWaterMark) || !isNumber(highWaterMark) || !isNonNegativeNumber(highWaterMark) {
+	// 2. Let highWaterMark be strategy["highWaterMark"].
+	highWaterMark := strategy.Get("highWaterMark")
+
+	// 3. If highWaterMark is NaN or highWaterMark < 0, throw a RangeError exception.
+	if goja.IsNaN(strategy.Get("highWaterMark")) || !isNumber(strategy.Get("highWaterMark")) || !isNonNegativeNumber(strategy.Get("highWaterMark")) {
 		common.Throw(rt, newError(RangeError, "highWaterMark must be a non-negative number"))
 	}
 
+	// 4. Return highWaterMark.
 	return highWaterMark.ToFloat()
 }
 

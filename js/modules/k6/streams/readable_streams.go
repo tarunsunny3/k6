@@ -5,6 +5,7 @@ import (
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
 	"go.k6.io/k6/js/promises"
+	"gopkg.in/guregu/null.v3"
 )
 
 // ReadableStream is a concrete instance of the general [readable stream] concept.
@@ -144,11 +145,75 @@ func (stream *ReadableStream) initialize() {
 // SetUpReadableByteStreamControllerFromUnderlyingSource abstract operation.
 //
 // [specification]: https://streams.spec.whatwg.org/#set-up-readable-byte-stream-controller-from-underlying-source
-// TODO: implement this!
+// FIXME: Try to unify it with setupReadableStreamDefaultControllerFromUnderlyingSource.
 func (stream *ReadableStream) setupReadableByteStreamControllerFromUnderlyingSource(
-	_ UnderlyingSource,
-	_ float64,
+	underlyingSource UnderlyingSource,
+	highWaterMark float64,
 ) {
+	// 1. Let controller be a new ReadableByteStreamController.
+	controller := &ReadableByteStreamController{}
+
+	// 2. Let startAlgorithm be an algorithm that returns undefined.
+	var startAlgorithm UnderlyingSourceStartCallback = func(*goja.Object) goja.Value {
+		return goja.Undefined()
+	}
+
+	// 3. Let pullAlgorithm be an algorithm that returns a promise resolved with undefined.
+	var pullAlgorithm UnderlyingSourcePullCallback = func(*goja.Object) *goja.Promise {
+		return newResolvedPromise(stream.vu, goja.Undefined())
+	}
+
+	// 4. Let cancelAlgorithm be an algorithm that returns a promise resolved with undefined.
+	var cancelAlgorithm UnderlyingSourceCancelCallback = func(any) *goja.Promise {
+		return newResolvedPromise(stream.vu, goja.Undefined())
+	}
+
+	// 5. If underlyingSourceDict["start"] exists, then set startAlgorithm to an algorithm
+	// which returns the result of invoking underlyingSourceDict["start"] with argument
+	// list « controller » and callback this value underlyingSource.
+	if underlyingSource.startSet {
+		startAlgorithm = func(obj *goja.Object) (v goja.Value) {
+			return underlyingSource.Start(obj)
+		}
+	}
+
+	// 6. If underlyingSourceDict["pull"] exists, then set pullAlgorithm to an algorithm
+	// which returns the result of invoking underlyingSourceDict["pull"] with argument
+	// list « controller » and callback this value underlyingSource.
+	if underlyingSource.pullSet {
+		pullAlgorithm = func(obj *goja.Object) (p *goja.Promise) {
+			if e := stream.runtime.Try(func() {
+				p = underlyingSource.Pull(obj)
+			}); e != nil {
+				return newRejectedPromise(stream.vu, e.Value())
+			}
+
+			if p == nil {
+				p, _, _ = promises.New(stream.vu)
+			}
+			return p
+		}
+	}
+
+	// 7. If underlyingSourceDict["cancel"] exists, then set cancelAlgorithm to an algorithm
+	// which takes an argument reason and returns the result of invoking underlyingSourceDict["cancel"]
+	// with argument list « reason » and callback this value underlyingSource.
+	if underlyingSource.cancelSet {
+		cancelAlgorithm = func(reason any) *goja.Promise {
+			return underlyingSource.Cancel(reason)
+		}
+	}
+
+	// 8. Let autoAllocateChunkSize be underlyingSourceDict["autoAllocateChunkSize"], if it exists, or undefined otherwise.
+	autoAllocateChunkSize := underlyingSource.AutoAllocateChunkSize
+
+	// 9. If autoAllocateChunkSize is 0, then throw a TypeError exception.
+	if autoAllocateChunkSize.Valid && autoAllocateChunkSize.Int64 == 0 {
+		common.Throw(stream.vu.Runtime(), newError(TypeError, "underlyingSource.[[autoAllocateChunkSize]] must be > 0"))
+	}
+
+	// 10. Perform ? SetUpReadableByteStreamController(stream, controller, startAlgorithm, pullAlgorithm, cancelAlgorithm, highWaterMark, autoAllocateChunkSize).
+	stream.setUpReadableByteStreamController(controller, startAlgorithm, pullAlgorithm, cancelAlgorithm, highWaterMark, autoAllocateChunkSize)
 }
 
 // setupReadableStreamDefaultControllerFromUnderlyingSource implements the [specification]'s
@@ -299,6 +364,86 @@ func (stream *ReadableStream) setupDefaultController(
 	if err != nil {
 		common.Throw(stream.vu.Runtime(), err)
 	}
+}
+
+// setUpReadableByteStreamController implements the specification's [SetUpReadableByteStreamController()] abstract operation.
+//
+// [SetUpReadableByteStreamController()]: https://streams.spec.whatwg.org/#set-up-readable-byte-stream-controller
+// FIXME: Try to unify it with setupDefaultController.
+func (stream *ReadableStream) setUpReadableByteStreamController(
+	controller *ReadableByteStreamController,
+	startAlgorithm UnderlyingSourceStartCallback,
+	pullAlgorithm UnderlyingSourcePullCallback,
+	cancelAlgorithm UnderlyingSourceCancelCallback,
+	highWaterMark float64,
+	autoAllocateChunkSize null.Int,
+) {
+	// 1. Assert: stream.[[controller]] is undefined.
+	if stream.controller != nil {
+		common.Throw(stream.vu.Runtime(), newError(AssertionError, "stream.[[controller]] is not undefined"))
+	}
+
+	// 2. If autoAllocateChunkSize is not undefined,
+	if autoAllocateChunkSize.Valid {
+		// 2.1. Assert: ! IsInteger(autoAllocateChunkSize) is true.
+		// 2.1. Assert: autoAllocateChunkSize is positive.
+		if autoAllocateChunkSize.Int64 <= 0 {
+			common.Throw(stream.vu.Runtime(), newError(AssertionError, "underlyingSource.[[autoAllocateChunkSize]] must be > 0"))
+		}
+	}
+
+	// 3. Set controller.[[stream]] to stream.
+	controller.stream = stream
+
+	// 4. Set controller.[[pullAgain]] and controller.[[pulling]] to false.
+	controller.pullAgain = false
+	controller.pulling = false
+
+	// 5. Set controller.[[byobRequest]] to null.
+	controller.ByobRequest = nil
+
+	// 6. Perform ! ResetQueue(controller).
+	controller.resetQueue()
+
+	// 7. Set controller.[[closeRequested]] and controller.[[started]] to false.
+	controller.closeRequested = false
+	controller.started = false
+
+	// 8. Set controller.[[strategyHWM]] to highWaterMark.
+	controller.strategyHWM = int64(highWaterMark)
+
+	// 9. Set controller.[[pullAlgorithm]] to pullAlgorithm.
+
+	// 10. Set controller.[[cancelAlgorithm]] to cancelAlgorithm.
+
+	// 11. Set controller.[[autoAllocateChunkSize]] to autoAllocateChunkSize.
+	if autoAllocateChunkSize.Valid {
+		controller.autoAllocateChunkSize = autoAllocateChunkSize.Int64
+	}
+
+	// 12. Set controller.[[pendingPullIntos]] to a new empty list.
+	controller.pendingPullIntos = make([]PullIntoDescriptor, 0)
+
+	// 13. Set stream.[[controller]] to controller.
+	stream.controller = controller
+
+	// 14. Let startResult be the result of performing startAlgorithm.
+
+	// 15. Let startPromise be a promise resolved with startResult.
+
+	// 16. Upon fulfillment of startPromise,
+
+	// 17. Set controller.[[started]] to true.
+
+	// 18. Assert: controller.[[pulling]] is false.
+
+	// 19. Assert: controller.[[pullAgain]] is false.
+
+	// 20. Perform ! ReadableByteStreamControllerCallPullIfNeeded(controller).
+
+	// 21. Upon rejection of startPromise with reason r,
+
+	// 22. Perform ! ReadableByteStreamControllerError(controller, r).
 }
 
 // setupDefaultReader implements the specification's [SetUpReadableStreamDefaultReader()] abstract operation.

@@ -3,6 +3,7 @@ package streams
 import (
 	"github.com/dop251/goja"
 	"go.k6.io/k6/js/common"
+	"gopkg.in/guregu/null.v3"
 )
 
 // UnderlyingSource represents the underlying source of a ReadableStream, and defines how
@@ -50,7 +51,7 @@ type UnderlyingSource struct {
 	// a consumer is using a default reader, the stream implementation will automatically
 	// allocate an ArrayBuffer of the given size, so that `controller.byobRequest` is always
 	// present, as if the consumer was using a BYOB reader.
-	AutoAllocateChunkSize uint
+	AutoAllocateChunkSize null.Int `json:"autoAllocateChunkSize"`
 
 	// startSet is true if the start function was set by the user.
 	startSet bool
@@ -74,12 +75,18 @@ type UnderlyingSourcePullCallback func(controller *goja.Object) *goja.Promise
 type UnderlyingSourceCancelCallback func(reason any) *goja.Promise
 
 // NewUnderlyingSourceFromObject creates a new UnderlyingSource from a goja.Object.
-func NewUnderlyingSourceFromObject(rt *goja.Runtime, obj *goja.Object) (*UnderlyingSource, error) {
-	var underlyingSource *UnderlyingSource
+func NewUnderlyingSourceFromObject(rt *goja.Runtime, obj *goja.Object) (UnderlyingSource, error) {
+	var underlyingSource UnderlyingSource
 
 	if common.IsNullish(obj) {
 		// If the user didn't provide an underlying source, use the default one.
 		return underlyingSource, nil
+	}
+
+	// We only accept a valid underlyingSource.[[type]]
+	underlyingSourceType := obj.Get("type")
+	if underlyingSourceType != nil && !goja.IsUndefined(obj.Get("type")) && obj.Get("type").String() != ReadableStreamTypeBytes {
+		return underlyingSource, newError(TypeError, "invalid underlying source type")
 	}
 
 	if err := rt.ExportTo(obj, &underlyingSource); err != nil {

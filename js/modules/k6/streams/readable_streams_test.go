@@ -47,6 +47,30 @@ func TestBadUnderlyingSources(t *testing.T) {
 	assert.NoError(t, gotErr)
 }
 
+func TestGeneral(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "general.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
+
+func TestPatchedGlobal(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "patched-global.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
+
 func TestReentrantStrategies(t *testing.T) {
 	t.Parallel()
 

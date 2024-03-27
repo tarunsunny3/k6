@@ -1032,7 +1032,7 @@ func (controller *ReadableByteStreamController) clearPendingPullIntos() {
 //
 // [ResetQueue(container)]: https://streams.spec.whatwg.org/#reset-queue
 func (controller *ReadableByteStreamController) resetQueue() {
-	controller.queue = []ReadableByteStreamQueueEntry{}
+	controller.queue = make([]ReadableByteStreamQueueEntry, 0)
 	controller.queueTotalSize = 0
 }
 
