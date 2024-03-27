@@ -107,60 +107,61 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 		highWaterMark := extractHighWaterMark(runtime, strategy, 1)
 
 		// 5.4
-		stream.setupDefaultControllerFromUnderlyingSource(*underlyingSource, highWaterMark, sizeAlgorithm)
+		stream.setupReadableStreamDefaultControllerFromUnderlyingSource(*underlyingSource, highWaterMark, sizeAlgorithm)
 	}
 
 	return runtime.ToValue(stream).ToObject(runtime)
 }
+func defaultSizeFunc(_ goja.Value) (float64, error) { return 1.0, nil }
 
 func (mi *ModuleInstance) initializeStrategy(call goja.ConstructorCall) *goja.Object {
 	runtime := mi.vu.Runtime()
 
-	// We first check if there's a user-specified underlying source, and whether its type is "bytes".
-	// If so, we'll take it into account when initializing the strategy.
-	var underlyingSourceIsBytes bool
-	if len(call.Arguments) > 0 && !common.IsNullish(call.Arguments[0]) {
-		srcObj := call.Arguments[0].ToObject(runtime)
-		if !common.IsNullish(srcObj.Get("type")) && srcObj.Get("type").String() == ReadableStreamTypeBytes {
-			underlyingSourceIsBytes = true
-		}
-	}
-
-	// Now, we proceed to initialize the strategy.
-	var (
-		scall    goja.ConstructorCall
-		strategy *goja.Object
-	)
-
+	// Either if the strategy is not provided or if it doesn't have a 'highWaterMark',
+	// we need to set its default value (highWaterMark=1).
+	// https://streams.spec.whatwg.org/#rs-prototype
+	strArg := runtime.NewObject()
 	if len(call.Arguments) > 1 && !common.IsNullish(call.Arguments[1]) {
-		scall = goja.ConstructorCall{Arguments: []goja.Value{call.Arguments[1]}}
-		strategy = mi.newCountQueuingStrategy(runtime, scall, !underlyingSourceIsBytes)
-	} else {
-		defaultStrategy := runtime.NewObject()
-		if err := defaultStrategy.Set("highWaterMark", 1); err != nil {
+		strArg = call.Arguments[1].ToObject(runtime)
+	}
+	if common.IsNullish(strArg.Get("highWaterMark")) {
+		if err := strArg.Set("highWaterMark", runtime.ToValue(1)); err != nil {
 			common.Throw(runtime, newError(RuntimeError, err.Error()))
 		}
-
-		scall = goja.ConstructorCall{Arguments: []goja.Value{defaultStrategy}}
-		strategy = mi.newCountQueuingStrategy(runtime, scall, !underlyingSourceIsBytes)
 	}
 
-	return strategy
+	// If the stream type is 'bytes', we don't want the size function.
+	// Except, when it is manually specified.
+	size := runtime.ToValue(defaultSizeFunc)
+	if len(call.Arguments) > 0 && !common.IsNullish(call.Arguments[0]) {
+		srcArg := call.Arguments[0].ToObject(runtime)
+		if !common.IsNullish(srcArg.Get("type")) && srcArg.Get("type").String() == ReadableStreamTypeBytes {
+			size = nil
+		}
+	}
+	if strArg.Get("size") != nil {
+		size = strArg.Get("size")
+	}
+
+	strCall := goja.ConstructorCall{Arguments: []goja.Value{strArg}}
+	return mi.newCountQueuingStrategy(runtime, strCall, size)
 }
 
 // NewCountQueuingStrategy is the constructor for the [CountQueuingStrategy] object.
 //
 // [CountQueuingStrategy]: https://streams.spec.whatwg.org/#cqs-class
-func (mi *ModuleInstance) NewCountQueuingStrategy(rt *goja.Runtime, call goja.ConstructorCall) *goja.Object {
-	// By default, the CountQueuingStrategy has the 'size' property.
-	return mi.newCountQueuingStrategy(rt, call, true)
+func (mi *ModuleInstance) NewCountQueuingStrategy(call goja.ConstructorCall) *goja.Object {
+	rt := mi.vu.Runtime()
+	// By default, the CountQueuingStrategy has a pre-defined 'size' property.
+	// It cannot be overwritten by the user.
+	return mi.newCountQueuingStrategy(rt, call, rt.ToValue(defaultSizeFunc))
 }
 
 // newCountQueuingStrategy is the underlying constructor for the [CountQueuingStrategy] object.
 //
 // It allows to create a CountQueuingStrategy with or without the 'size' property,
 // depending on how the containing ReadableStream is initialized.
-func (mi *ModuleInstance) newCountQueuingStrategy(rt *goja.Runtime, call goja.ConstructorCall, withSize bool) *goja.Object {
+func (mi *ModuleInstance) newCountQueuingStrategy(rt *goja.Runtime, call goja.ConstructorCall, size goja.Value) *goja.Object {
 	obj := rt.NewObject()
 
 	if len(call.Arguments) != 1 {
@@ -181,24 +182,16 @@ func (mi *ModuleInstance) newCountQueuingStrategy(rt *goja.Runtime, call goja.Co
 		common.Throw(rt, newError(TypeError, err.Error()))
 	}
 
-	var err error
-	// By default, we set the given 'size', if any.
-	if !common.IsNullish(argObj.Get("size")) {
-		err = setReadOnlyPropertyOf(obj, "size", argObj.Get("size"))
-		// Otherwise, we set the default size function, when needed.
-	} else if withSize {
-		sizeFunc := func(_ goja.Value) (float64, error) { return 1.0, nil }
-		err = setReadOnlyPropertyOf(obj, "size", rt.ToValue(sizeFunc))
-	}
-
-	if err != nil {
-		common.Throw(rt, newError(TypeError, err.Error()))
+	if !common.IsNullish(size) {
+		if err := setReadOnlyPropertyOf(obj, "size", size); err != nil {
+			common.Throw(rt, newError(TypeError, err.Error()))
+		}
 	}
 
 	return obj
 }
 
-// extractHighWaterMark returns the high water mark for the given queuing strategy.
+// extractHighWaterMark returns the high watermark for the given queuing strategy.
 //
 // It implements the [ExtractHighWaterMark] algorithm.
 //

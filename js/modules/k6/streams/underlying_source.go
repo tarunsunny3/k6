@@ -12,7 +12,7 @@ import (
 type UnderlyingSource struct {
 	// StartFunc is called immediately during the creation of a ReadableStream.
 	//
-	// Typically this is used to a adapt a push source by setting up relevant event listeners.
+	// Typically, this is used to a adapt a push source by setting up relevant event listeners.
 	// If the setup process is asynchronous, it can return a Promise to signal success or
 	// failure; a rejected promise will error the stream.
 	Start UnderlyingSourceStartCallback `json:"start"`
@@ -63,11 +63,11 @@ type UnderlyingSource struct {
 }
 
 // UnderlyingSourceStartCallback is a function that is called immediately during the creation of a ReadableStream.
-type UnderlyingSourceStartCallback func(controller ReadableStreamController) goja.Value
+type UnderlyingSourceStartCallback func(controller *goja.Object) goja.Value
 
 // UnderlyingSourcePullCallback is a function that is called whenever the stream's internal queue of chunks
 // becomes not full, i.e. whenever the queue's desired size becomes positive.
-type UnderlyingSourcePullCallback func(controller ReadableStreamController) *goja.Promise
+type UnderlyingSourcePullCallback func(controller *goja.Object) *goja.Promise
 
 // UnderlyingSourceCancelCallback is a function that is called when the stream's or reader's `cancel()` method is
 // called.
@@ -78,7 +78,7 @@ func NewUnderlyingSourceFromObject(rt *goja.Runtime, obj *goja.Object) (*Underly
 	var underlyingSource *UnderlyingSource
 
 	if common.IsNullish(obj) {
-		// If the user didn't provide a underlying source, use the default one.
+		// If the user didn't provide an underlying source, use the default one.
 		return underlyingSource, nil
 	}
 
@@ -86,16 +86,15 @@ func NewUnderlyingSourceFromObject(rt *goja.Runtime, obj *goja.Object) (*Underly
 		return underlyingSource, newError(TypeError, "invalid underlying source object")
 	}
 
-	startProperty := obj.Get("start")
-	if !common.IsNullish(startProperty) {
+	if underlyingSource.Start != nil {
 		underlyingSource.startSet = true
 	}
 
-	if !common.IsNullish(obj.Get("pull")) {
+	if underlyingSource.Pull != nil {
 		underlyingSource.pullSet = true
 	}
 
-	if !common.IsNullish(obj.Get("cancel")) {
+	if underlyingSource.Cancel != nil {
 		underlyingSource.cancelSet = true
 	}
 

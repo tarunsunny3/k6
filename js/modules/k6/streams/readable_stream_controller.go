@@ -23,6 +23,9 @@ type ReadableStreamController interface {
 	// releaseSteps performs the controller’s steps that run when a reader is
 	// released, used to clean up reader-specific resources stored in the controller.
 	releaseSteps()
+
+	// toObject returns a [*goja.Object] that represents the controller.
+	toObject() (*goja.Object, error)
 }
 
 // SizeAlgorithm is a function that returns the size of a chunk.

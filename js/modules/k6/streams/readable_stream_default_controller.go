@@ -13,9 +13,6 @@ import (
 //
 // [specification]: https://streams.spec.whatwg.org/#rs-default-controller-class
 type ReadableStreamDefaultController struct {
-	// FIXME: readonly attribute desiredSize;
-	// desiredSize func() int
-
 	// Internal slots
 	cancelAlgorithm UnderlyingSourceCancelCallback
 
@@ -49,7 +46,7 @@ type ReadableStreamDefaultController struct {
 	// strategyHWM is a number supplied to the constructor as part of the stream's queuing
 	// strategy, indicating the point at which the stream will apply backpressure to its
 	// [UnderlyingSource].
-	strategyHWM int
+	strategyHWM float64
 
 	// strategySizeAlgorithm is an algorithm to calculate the size of enqueued chunks, as part
 	// of stream's queuing strategy.
@@ -61,6 +58,38 @@ type ReadableStreamDefaultController struct {
 
 // Ensure that ReadableStreamDefaultController implements the ReadableStreamController interface.
 var _ ReadableStreamController = &ReadableStreamDefaultController{}
+
+// NewReadableStreamDefaultControllerObject creates a new [goja.Object] from a [ReadableStreamDefaultController] instance.
+func NewReadableStreamDefaultControllerObject(controller *ReadableStreamDefaultController) (*goja.Object, error) {
+	rt := controller.stream.runtime
+	obj := rt.NewObject()
+
+	err := obj.DefineAccessorProperty("desiredSize", rt.ToValue(func() goja.Value {
+		desiredSize := controller.getDesiredSize()
+		if !desiredSize.Valid {
+			return goja.Null()
+		}
+		return rt.ToValue(desiredSize.Int64)
+	}), nil, goja.FLAG_FALSE, goja.FLAG_TRUE)
+	if err != nil {
+		return nil, err
+	}
+
+	// Exposing the properties of the [ReadableStreamController] interface
+	if err := setReadOnlyPropertyOf(obj, "close", rt.ToValue(controller.Close)); err != nil {
+		return nil, err
+	}
+
+	if err := setReadOnlyPropertyOf(obj, "enqueue", rt.ToValue(controller.Enqueue)); err != nil {
+		return nil, err
+	}
+
+	if err := setReadOnlyPropertyOf(obj, "error", rt.ToValue(controller.Error)); err != nil {
+		return nil, err
+	}
+
+	return obj, nil
+}
 
 // Close closes the stream.
 //
@@ -83,12 +112,12 @@ func (controller *ReadableStreamDefaultController) Close() {
 //
 // [specification]: https://streams.spec.whatwg.org/#rs-default-controller-enqueue
 func (controller *ReadableStreamDefaultController) Enqueue(chunk goja.Value) {
-	// 1.
+	// 1. If ! ReadableStreamDefaultControllerCanCloseOrEnqueue(this) is false, throw a TypeError exception.
 	if !controller.canCloseOrEnqueue() {
 		common.Throw(controller.stream.vu.Runtime(), newError(TypeError, "cannot close or enqueue"))
 	}
 
-	// 2.
+	// 2. Perform ? ReadableStreamDefaultControllerEnqueue(this, chunk).
 	if err := controller.enqueue(chunk); err != nil {
 		common.Throw(controller.stream.vu.Runtime(), err)
 	}
@@ -135,19 +164,23 @@ func (controller *ReadableStreamDefaultController) cancelSteps(reason any) *goja
 //
 // [ReadableStreamDefaultControllerPullSteps]: https://streams.spec.whatwg.org/#rs-default-controller-private-pull
 func (controller *ReadableStreamDefaultController) pullSteps(readRequest ReadRequest) {
-	// 1.
+	// 1. Let stream be this.[[stream]].
 	stream := controller.stream
 
-	// 2.
+	// 2. If this.[[queue]] is not empty,
 	if controller.queue.Len() > 0 {
+		// 2.1. Let chunk be ! DequeueValue(this).
 		chunk, err := controller.queue.Dequeue()
 		if err != nil {
 			common.Throw(stream.vu.Runtime(), err)
 		}
 
+		// 2.2. If this.[[closeRequested]] is true and this.[[queue]] is empty,
 		if controller.closeRequested && controller.queue.Len() == 0 {
-			controller.clearAlgorithms() // ReadableStreamDefaultControllerClearAlgorithms(controller).
-			stream.close()               // ReadableStreamClose(stream).
+			// 2.2.1. Perform ! ReadableStreamDefaultControllerClearAlgorithms(this).
+			controller.clearAlgorithms()
+			// 2.2.2. Perform ! ReadableStreamClose(stream).
+			stream.close()
 		} else {
 			controller.callPullIfNeeded()
 		}
@@ -199,35 +232,46 @@ func (controller *ReadableStreamDefaultController) close() {
 //
 // [specification]: https://streams.spec.whatwg.org/#readable-stream-default-controller-enqueue
 func (controller *ReadableStreamDefaultController) enqueue(chunk goja.Value) error {
-	// 1.
+	// 1. If ! ReadableStreamDefaultControllerCanCloseOrEnqueue(controller) is false, return.
 	if !controller.canCloseOrEnqueue() {
 		return nil
 	}
 
-	// 2.
+	// 2. Let stream be controller.[[stream]].
 	stream := controller.stream
 
-	// 3.
+	// 3. If ! IsReadableStreamLocked(stream) is true and ! ReadableStreamGetNumReadRequests(stream) > 0, perform ! ReadableStreamFulfillReadRequest(stream, chunk, false).
 	if stream.isLocked() && stream.getNumReadRequests() > 0 {
 		stream.fulfillReadRequest(chunk, false)
-	} else {
-		// 4.1.
+	} else { // 4. Otherwise,
+		// 4.1. Let result be the result of performing controller.[[strategySizeAlgorithm]], passing in chunk, and interpreting the result as a completion record.
 		size, err := controller.strategySizeAlgorithm(goja.Undefined(), chunk)
-		if err != nil { // If result is an abrupt completion
-			controller.error(err)
-			return err
-		}
 
-		err = controller.queue.Enqueue(chunk, size.ToFloat())
+		// 4.2 If result is an abrupt completion,
 		if err != nil {
+			// 4.2.1. Perform ! ReadableStreamDefaultControllerError(controller, result.[[Value]]).
 			controller.error(err)
+			// 4.2.2. Return result.
 			return err
 		}
 
-		// Perform any additional actions required after enqueuing.
-		controller.callPullIfNeeded()
+		// 4.3. Let chunkSize be result.[[Value]].
+		chunkSize := size.ToFloat()
+
+		// 4.4. Let enqueueResult be EnqueueValueWithSize(controller, chunk, chunkSize).
+		err = controller.queue.Enqueue(chunk, chunkSize)
+
+		// 4.5. If enqueueResult is an abrupt completion,
+		if err != nil {
+			// 4.5.1. Perform ! ReadableStreamDefaultControllerError(controller, enqueueResult.[[Value]]).
+			controller.error(err)
+			// 4.5.2. Return enqueueResult.
+			return err
+		}
 	}
 
+	// 5. Perform ! ReadableStreamDefaultControllerCallPullIfNeeded(controller).
+	controller.callPullIfNeeded()
 	return nil
 }
 
@@ -236,21 +280,21 @@ func (controller *ReadableStreamDefaultController) enqueue(chunk goja.Value) err
 //
 // [ReadableStreamDefaultControllerError(e)]: https://streams.spec.whatwg.org/#readable-stream-default-controller-error
 func (controller *ReadableStreamDefaultController) error(e any) {
-	// 1.
+	// 1. Let stream be controller.[[stream]].
 	stream := controller.stream
 
-	// 2.
+	// 2. If stream.[[state]] is not "readable", return.
 	if stream.state != ReadableStreamStateReadable {
 		return
 	}
 
-	// 3.
+	// 3. Perform ! ResetQueue(controller).
 	controller.resetQueue()
 
-	// 4.
+	// 4. Perform ! ReadableStreamDefaultControllerClearAlgorithms(controller).
 	controller.clearAlgorithms()
 
-	// 5.
+	// 5.Perform ! ReadableStreamError(stream, e).
 	stream.error(e)
 }
 
@@ -262,13 +306,13 @@ func (controller *ReadableStreamDefaultController) error(e any) {
 //
 // [specification]: https://streams.spec.whatwg.org/#readable-stream-default-controller-clear-algorithms
 func (controller *ReadableStreamDefaultController) clearAlgorithms() {
-	// 1.
+	// 1. Set controller.[[pullAlgorithm]] to undefined.
 	controller.pullAlgorithm = nil
 
-	// 2.
+	// 2. Set controller.[[cancelAlgorithm]] to undefined.
 	controller.cancelAlgorithm = nil
 
-	// 3.
+	// 3. Set controller.[[strategySizeAlgorithm]] to undefined.
 	controller.strategySizeAlgorithm = nil
 }
 
@@ -280,14 +324,15 @@ func (controller *ReadableStreamDefaultController) clearAlgorithms() {
 //
 // [specification]: https://streams.spec.whatwg.org/#readable-stream-default-controller-can-close-or-enqueue
 func (controller *ReadableStreamDefaultController) canCloseOrEnqueue() bool {
-	// 1.
+	// 1. Let state be controller.[[stream]].[[state]].
 	state := controller.stream.state
 
+	// 2. If controller.[[closeRequested]] is false and state is "readable", return true.
 	if !controller.closeRequested && state == ReadableStreamStateReadable {
 		return true
 	}
 
-	// 3.
+	// 3. Otherwise, return false.
 	return false
 }
 
@@ -297,10 +342,13 @@ func (controller *ReadableStreamDefaultController) canCloseOrEnqueue() bool {
 //
 // [ReadableStreamDefaultControllerResetQueue]: https://streams.spec.whatwg.org/#reset-queue
 func (controller *ReadableStreamDefaultController) resetQueue() {
-	// 2.
+	// 1. Assert: container has [[queue]] and [[queueTotalSize]] internal slots.
+	// ReadableStreamDefaultController.queue && ReadableStreamDefaultController.queueTotalSize
+
+	// 2. Set container.[[queue]] to a new empty list.
 	controller.queue = NewQueueWithSizes()
 
-	// 3.
+	// 3. Set container.[[queueTotalSize]] to 0.
 	controller.queueTotalSize = 0
 }
 
@@ -308,10 +356,10 @@ func (controller *ReadableStreamDefaultController) resetQueue() {
 //
 // [specification]: https://streams.spec.whatwg.org/#readable-stream-default-controller-call-pull-if-needed
 func (controller *ReadableStreamDefaultController) callPullIfNeeded() {
-	// 1. let shouldPull be ! ReadableStreamDefaultControllerShouldCallPull(controller).
+	// 1. Let shouldPull be ! ReadableStreamDefaultControllerShouldCallPull(controller).
 	shouldPull := controller.shouldCallPull()
 
-	// 2. if shouldPull is false, return.
+	// 2. If shouldPull is false, return.
 	if !shouldPull {
 		return
 	}
@@ -320,6 +368,7 @@ func (controller *ReadableStreamDefaultController) callPullIfNeeded() {
 	if controller.pulling {
 		// 3.1. Set controller.[[pullAgain]] to true.
 		controller.pullAgain = true
+		// 3.2. Return.
 		return
 	}
 
@@ -331,32 +380,32 @@ func (controller *ReadableStreamDefaultController) callPullIfNeeded() {
 	// 5. Set controller.[[pulling]] to true.
 	controller.pulling = true
 
-	// 6. let pullPromise be the result of performing controller.[[pullAlgorithm]].
-	pullPromise := controller.pullAlgorithm(controller)
+	// 6. Let pullPromise be the result of performing controller.[[pullAlgorithm]].
+	controllerObj, err := controller.toObject()
+	if err != nil {
+		common.Throw(controller.stream.vu.Runtime(), newError(RuntimeError, err.Error()))
+	}
+	pullPromise := controller.pullAlgorithm(controllerObj)
 
-	_, err := promiseThen(controller.stream.vu.Runtime(), pullPromise,
+	_, err = promiseThen(controller.stream.vu.Runtime(), pullPromise,
 		// 7. Upon fulfillment of pullPromise
 		func(value goja.Value) {
 			// 1. Set controller.[[pulling]] to false.
 			controller.pulling = false
 
 			// 2. If controller.[[pullAgain]] is true,
-			// 2.1. Set controller.[[pullAgain]] to false.
-			controller.pullAgain = false
-			// 2.2. Perform ! ReadableStreamDefaultControllerCallPullIfNeeded(controller).
-			controller.callPullIfNeeded()
+			if controller.pullAgain {
+				// 2.1. Set controller.[[pullAgain]] to false.
+				controller.pullAgain = false
+				// 2.2. Perform ! ReadableStreamDefaultControllerCallPullIfNeeded(controller).
+				controller.callPullIfNeeded()
+			}
 		},
 
-		// 8. Upon rejection of pullPromise with reason e
+		// 8. Upon rejection of pullPromise with reason e,
 		func(reason goja.Value) {
-			// 1. Perform ! ReadableStreamDefaultControllerError(controller, e).
-			// FIXME: handle error properly, this is not safe. Argument should probably be `any`?
-			err, ok := reason.Export().(error)
-			if !ok {
-				common.Throw(controller.stream.vu.Runtime(), newError(AssertionError, "reason is not an error"))
-			}
-
-			controller.error(err)
+			// 8.1. Perform ! ReadableStreamDefaultControllerError(controller, e).
+			controller.error(reason.Export())
 		},
 	)
 	if err != nil {
@@ -368,30 +417,38 @@ func (controller *ReadableStreamDefaultController) callPullIfNeeded() {
 //
 // [specification]: https://streams.spec.whatwg.org/#readable-stream-default-controller-should-call-pull
 func (controller *ReadableStreamDefaultController) shouldCallPull() bool {
-	// 1. Let stream be controller.[[controlledReadableStream]].
+	// 1. Let stream be controller.[[stream]].
 	stream := controller.stream
 
+	// 2. If ! ReadableStreamDefaultControllerCanCloseOrEnqueue(controller) is false, return false.
 	if !controller.canCloseOrEnqueue() {
 		return false
 	}
 
+	// 3. If controller.[[started]] is false, return false.
 	if !controller.started {
 		return false
 	}
 
+	// 4. If ! IsReadableStreamLocked(stream) is true and ! ReadableStreamGetNumReadRequests(stream) > 0, return true.
 	if stream.isLocked() && stream.getNumReadRequests() > 0 {
 		return true
 	}
 
+	// 5. Let desiredSize be ! ReadableStreamDefaultControllerGetDesiredSize(controller).
 	desiredSize := controller.getDesiredSize()
+
+	// 6. Assert: desiredSize is not null.
 	if !desiredSize.Valid {
 		common.Throw(controller.stream.vu.Runtime(), newError(AssertionError, "desiredSize is null"))
 	}
 
+	// 7. If desiredSize > 0, return true.
 	if desiredSize.Int64 > 0 {
 		return true
 	}
 
+	// 8. Return false.
 	return false
 }
 
@@ -406,5 +463,9 @@ func (controller *ReadableStreamDefaultController) getDesiredSize() null.Int {
 		return null.NewInt(0, true)
 	}
 
-	return null.NewInt(int64(controller.strategyHWM-controller.queueTotalSize), true)
+	return null.NewInt(int64(int(controller.strategyHWM)-controller.queueTotalSize), true)
+}
+
+func (controller *ReadableStreamDefaultController) toObject() (*goja.Object, error) {
+	return NewReadableStreamDefaultControllerObject(controller)
 }

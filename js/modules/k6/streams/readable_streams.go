@@ -93,6 +93,13 @@ func (stream *ReadableStream) GetReader(options *goja.Object) goja.Value {
 	return stream.runtime.ToValue(stream.acquireBYOBReader())
 }
 
+// Tee implements the [tee] operation.
+//
+// [tee]: https://streams.spec.whatwg.org/#rs-tee
+func (stream *ReadableStream) Tee() goja.Value {
+	return nil
+}
+
 // ReadableStreamState represents the current state of a ReadableStream
 type ReadableStreamState string
 
@@ -107,7 +114,7 @@ const (
 	ReadableStreamStateErrored = "errored"
 )
 
-// ReadableStreamType represents the type of a ReadableStream
+// ReadableStreamType represents the type of the ReadableStream
 type ReadableStreamType = string
 
 const (
@@ -144,39 +151,35 @@ func (stream *ReadableStream) setupReadableByteStreamControllerFromUnderlyingSou
 ) {
 }
 
-func (stream *ReadableStream) setupDefaultControllerFromUnderlyingSource(underlyingSource UnderlyingSource, highWaterMark float64, sizeAlgorithm SizeAlgorithm) {
+// setupReadableStreamDefaultControllerFromUnderlyingSource implements the [specification]'s
+// SetUpReadableStreamDefaultController abstract operation.
+//
+// [specification]: https://streams.spec.whatwg.org/#set-up-readable-stream-default-controller-from-underlying-source
+func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlyingSource(underlyingSource UnderlyingSource, highWaterMark float64, sizeAlgorithm SizeAlgorithm) {
 	// 1. Let controller be a new ReadableStreamDefaultController.
 	controller := &ReadableStreamDefaultController{}
+
 	// 2. Let startAlgorithm be an algorithm that returns undefined.
-	var startAlgorithm UnderlyingSourceStartCallback = func(ReadableStreamController) goja.Value {
+	var startAlgorithm UnderlyingSourceStartCallback = func(*goja.Object) goja.Value {
 		return goja.Undefined()
 	}
 
 	// 3. Let pullAlgorithm be an algorithm that returns a promise resolved with undefined.
-	var pullAlgorithm UnderlyingSourcePullCallback = func(ReadableStreamController) *goja.Promise {
-		promise, resolve, _ := promises.New(stream.vu)
-
-		go func() {
-			resolve(goja.Undefined())
-		}()
-		return promise
+	var pullAlgorithm UnderlyingSourcePullCallback = func(*goja.Object) *goja.Promise {
+		return newResolvedPromise(stream.vu, goja.Undefined())
 	}
 
 	// 4. Let cancelAlgorithm be an algorithm that returns a promise resolved with undefined.
 	var cancelAlgorithm UnderlyingSourceCancelCallback = func(any) *goja.Promise {
-		promise, resolve, _ := promises.New(stream.vu)
-		go func() {
-			resolve(goja.Undefined())
-		}()
-		return promise
+		return newResolvedPromise(stream.vu, goja.Undefined())
 	}
 
 	// 5. If underlyingSourceDict["start"] exists, then set startAlgorithm to an algorithm
 	// which returns the result of invoking underlyingSourceDict["start"] with argument
 	// list « controller » and callback this value underlyingSource.
 	if underlyingSource.startSet {
-		startAlgorithm = func(ReadableStreamController) goja.Value {
-			return underlyingSource.Start(controller)
+		startAlgorithm = func(obj *goja.Object) (v goja.Value) {
+			return underlyingSource.Start(obj)
 		}
 	}
 
@@ -184,8 +187,17 @@ func (stream *ReadableStream) setupDefaultControllerFromUnderlyingSource(underly
 	// returns the result of invoking underlyingSourceDict["pull"] with argument list
 	// « controller » and callback this value underlyingSource.
 	if underlyingSource.pullSet {
-		pullAlgorithm = func(ReadableStreamController) *goja.Promise {
-			return underlyingSource.Pull(controller)
+		pullAlgorithm = func(obj *goja.Object) (p *goja.Promise) {
+			if e := stream.runtime.Try(func() {
+				p = underlyingSource.Pull(obj)
+			}); e != nil {
+				return newRejectedPromise(stream.vu, e.Value())
+			}
+
+			if p == nil {
+				p, _, _ = promises.New(stream.vu)
+			}
+			return p
 		}
 	}
 
@@ -193,8 +205,8 @@ func (stream *ReadableStream) setupDefaultControllerFromUnderlyingSource(underly
 	// reason and returns the result of invoking underlyingSourceDict["cancel"] with argument list « reason » and
 	// callback this value underlyingSource.
 	if underlyingSource.cancelSet {
-		cancelAlgorithm = func(any) *goja.Promise {
-			return underlyingSource.Cancel(controller)
+		cancelAlgorithm = func(reason any) *goja.Promise {
+			return underlyingSource.Cancel(reason)
 		}
 	}
 
@@ -233,6 +245,7 @@ func (stream *ReadableStream) setupDefaultController(
 
 	// 5. Set controller.[[strategySizeAlgorithm]] to sizeAlgorithm and controller.[[strategyHWM]] to highWaterMark.
 	controller.strategySizeAlgorithm = sizeAlgorithm
+	controller.strategyHWM = highWaterMark
 
 	// 6. Set controller.[[pullAlgorithm]] to pullAlgorithm.
 	controller.pullAlgorithm = pullAlgorithm
@@ -244,12 +257,21 @@ func (stream *ReadableStream) setupDefaultController(
 	stream.controller = controller
 
 	// 9. Let startResult be the result of performing startAlgorithm. (This might throw an exception.)
-	startResult := startAlgorithm(controller)
+	controllerObj, err := controller.toObject()
+	if err != nil {
+		common.Throw(controller.stream.vu.Runtime(), newError(RuntimeError, err.Error()))
+	}
+	startResult := startAlgorithm(controllerObj)
 
 	// 10. Let startPromise be a promise with startResult.
-	startPromise := newResolvedPromise(stream.vu, startResult)
+	var startPromise *goja.Promise
+	if p, ok := startResult.Export().(*goja.Promise); ok {
+		startPromise = p
+	} else {
+		startPromise = newResolvedPromise(controller.stream.vu, startResult)
+	}
 
-	_, err := promiseThen(stream.vu.Runtime(), startPromise,
+	_, err = promiseThen(stream.vu.Runtime(), startPromise,
 		// 11. Upon fulfillment of startPromise,
 		func(goja.Value) {
 			// 11.1. Set controller.[[started]] to true.
@@ -323,15 +345,15 @@ func (stream *ReadableStream) setupBYOBReader(reader *ReadableStreamBYOBReader) 
 
 // acquireDefaultReader implements the specification's [AcquireReadableStreamDefaultReader] algorithm.
 //
-// [AcquireReadableStreamDefaultReader]: https://streams.spec.whatwg.org/#acquire-readable-stream-default-reader
+// [AcquireReadableStreamDefaultReader]: https://streams.spec.whatwg.org/#acquire-readable-stream-reader
 func (stream *ReadableStream) acquireDefaultReader() *ReadableStreamDefaultReader {
-	// 1. let reader b a new ReadableStreamDefaultReader
+	// 1. Let reader be a new ReadableStreamDefaultReader.
 	reader := &ReadableStreamDefaultReader{}
 
-	// 2.
+	// 2. Perform ? SetUpReadableStreamDefaultReader(reader, stream).
 	reader.setup(stream)
 
-	// 3.
+	// 3. Return reader.
 	return reader
 }
 
@@ -426,62 +448,49 @@ func (stream *ReadableStream) cancel(reason goja.Value) *goja.Promise {
 	return promise
 }
 
-// FIXME: make a pass on this method to ensure outstanding comments are addressed
-// and the code is aligned with the spec
-//
 // close implements the specification's [ReadableStreamClose()] abstract operation.
 //
 // [ReadableStreamClose()]: https://streams.spec.whatwg.org/#readable-stream-close
 func (stream *ReadableStream) close() {
-	// 1.
+	// 1. Assert: stream.[[state]] is "readable".
 	if stream.state != ReadableStreamStateReadable {
 		common.Throw(stream.vu.Runtime(), newError(AssertionError, "cannot close a stream that is not readable"))
 	}
 
-	// 2.
+	// 2. Set stream.[[state]] to "closed".
 	stream.state = ReadableStreamStateClosed
 
-	// 3.
+	// 3. Let reader be stream.[[reader]].
 	reader := stream.reader
 
-	// 4.
+	// 4. If reader is undefined, return.
 	if reader == nil {
 		return
 	}
 
 	// 5. Resolve reader.[[closedPromise]] with undefined.
-	//genericReader, ok := reader.(*ReadableStreamGenericReader)
-	//if !ok {
-	//	common.Throw(stream.vu.Runtime(), newError(AssertionError, "reader is not a ReadableStreamGenericReader"))
-	//}
+	genericReader, ok := reader.(ReadableStreamGenericReader)
+	if !ok {
+		common.Throw(stream.vu.Runtime(), newError(AssertionError, "reader is not a ReadableStreamGenericReader"))
+	}
 
-	// // FIXME: is this the right way to do it?
-	// go func() {
-	// 	genericReader.closedPromiseResolveFunc(goja.Undefined())
-	// }()
+	_, resolveFunc, _ := genericReader.GetClosed()
+	resolveFunc(goja.Undefined())
 
 	// 6. If reader implements ReadableStreamDefaultReader,
 	defaultReader, ok := reader.(*ReadableStreamDefaultReader)
-	if !ok {
-		common.Throw(stream.vu.Runtime(), newError(RuntimeError, "reader is not a ReadableStreamDefaultReader"))
-	}
+	if ok {
+		// 6.1. Let readRequests be reader.[[readRequests]].
+		readRequests := defaultReader.readRequests
 
-	go func() {
-		// defaultReader.closedPromiseResolveFunc(goja.Undefined())
-		_, resolveFunc, _ := defaultReader.GetClosed()
-		resolveFunc(goja.Undefined())
-	}()
+		// 6.2. Set reader.[[readRequests]] to an empty list.
+		defaultReader.readRequests = []ReadRequest{}
 
-	// 6.1. Let readRequests be reader.[[readRequests]].
-	readRequests := defaultReader.readRequests
-
-	// 6.2. Set reader.[[readRequests]] to an empty list.
-	defaultReader.readRequests = []ReadRequest{}
-
-	// 6.3. For each readRequest of readRequests,
-	for _, readRequest := range readRequests {
-		// 6.3.1. Perform readRequest’s close steps.
-		readRequest.closeSteps()
+		// 6.3. For each readRequest of readRequests,
+		for _, readRequest := range readRequests {
+			// 6.3.1. Perform readRequest’s close steps.
+			readRequest.closeSteps()
+		}
 	}
 }
 
@@ -489,21 +498,21 @@ func (stream *ReadableStream) close() {
 //
 // [ReadableStreamError]: https://streams.spec.whatwg.org/#readable-stream-error
 func (stream *ReadableStream) error(e any) {
-	// 1.
+	// 1. Assert: stream.[[state]] is "readable".
 	if stream.state != ReadableStreamStateReadable {
 		common.Throw(stream.vu.Runtime(), newError(AssertionError, "cannot error a stream that is not readable"))
 	}
 
-	// 2.
+	// 2. Set stream.[[state]] to "errored".
 	stream.state = ReadableStreamStateErrored
 
-	// 3.
+	// 3. Set stream.[[storedError]] to e.
 	stream.storedError = e
 
-	// 4.
+	// 4. Let reader be stream.[[reader]].
 	reader := stream.reader
 
-	// 5.
+	// 5. If reader is undefined, return.
 	if reader == nil {
 		return
 	}
@@ -513,32 +522,37 @@ func (stream *ReadableStream) error(e any) {
 		common.Throw(stream.vu.Runtime(), newError(AssertionError, "reader is not a ReadableStreamGenericReader"))
 	}
 
-	// 6.
-	_, _, rejectFunc := genericReader.GetClosed()
+	// 6. Reject reader.[[closedPromise]] with e.
+	promise, _, rejectFunc := genericReader.GetClosed()
 	rejectFunc(e)
-	// genericReader.closedPromiseRejectFunc(e)
 
-	// 7.
-	// TODO: set reader.[[closedPromise]].[[[PromiseIsHandled]]] to true
-	// FIXME: see https://github.com/denoland/deno/blob/74e39a927c63e789fec1c8f1817812920079229d/ext/web/06_streams.js#L167
-	// genericReader.closedPromise.PromiseIsHandled = true
+	// 7. Set reader.[[closedPromise]].[[PromiseIsHandled]] to true.
+	// FIXME: See https://github.com/dop251/goja/issues/565
+	var (
+		err       error
+		doNothing = func(goja.Value) {}
+	)
+	_, err = promiseThen(stream.vu.Runtime(), promise, doNothing, doNothing)
+	if err != nil {
+		common.Throw(stream.vu.Runtime(), newError(RuntimeError, err.Error()))
+	}
 
-	// 8.
+	// 8. If reader implements ReadableStreamDefaultReader,
 	defaultReader, ok := reader.(*ReadableStreamDefaultReader)
 	if ok {
-		// 8.1.
+		// 8.1. Perform ! ReadableStreamDefaultReaderErrorReadRequests(reader, e).
 		defaultReader.errorReadRequests(e)
 		return
 	}
 
 	// 9. OTHERWISE, reader is a ReadableStreamBYOBReader
-	// 9.1.
+	// 9.1. Assert: reader implements ReadableStreamBYOBReader.
 	byobReader, ok := reader.(*ReadableStreamBYOBReader)
 	if !ok {
 		common.Throw(stream.vu.Runtime(), newError(AssertionError, "reader is not a ReadableStreamBYOBReader"))
 	}
 
-	// 9.2.
+	// 9.2. Perform ! ReadableStreamBYOBReaderErrorReadIntoRequests(reader, e).
 	byobReader.errorReadIntoRequests(e)
 }
 
@@ -582,7 +596,7 @@ func (stream *ReadableStream) fulfillReadIntoRequest(chunk any, done bool) {
 // [ReadableStreamFulfillReadRequest()]: https://streams.spec.whatwg.org/#readable-stream-fulfill-read-request
 func (stream *ReadableStream) fulfillReadRequest(chunk any, done bool) {
 	// 1. Assert: ! ReadableStreamHasDefaultReader(stream) is true.
-	if stream.hasDefaultReader() {
+	if !stream.hasDefaultReader() {
 		common.Throw(stream.vu.Runtime(), newError(AssertionError, "stream does not have a default reader"))
 	}
 
@@ -632,19 +646,19 @@ func (stream *ReadableStream) getNumReadIntoRequests() int {
 
 // getNumReadRequests implements the [ReadableStreamGetNumReadRequests()] algorithm.
 //
-// [ReadableStreamGetNumReadRequests()]:https://streams.spec.whatwg.org/#readable-stream-get-num-read-requests
+// [ReadableStreamGetNumReadRequests()]: https://streams.spec.whatwg.org/#readable-stream-get-num-read-requests
 func (stream *ReadableStream) getNumReadRequests() int {
-	// 1.
+	// 1. Assert: ! ReadableStreamHasDefaultReader(stream) is true.
 	if !stream.hasDefaultReader() {
 		common.Throw(stream.vu.Runtime(), newError(AssertionError, "stream does not have a default reader"))
 	}
 
+	// 2. Return stream.[[reader]].[[readRequests]]'s size.
 	defaultReader, ok := stream.reader.(*ReadableStreamDefaultReader)
 	if !ok {
 		common.Throw(stream.vu.Runtime(), newError(RuntimeError, "reader is not a ReadableStreamDefaultReader"))
 	}
 
-	// 2.
 	return len(defaultReader.readRequests)
 }
 

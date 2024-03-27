@@ -122,25 +122,43 @@ type ReadRequest struct {
 //
 // [specification]: https://streams.spec.whatwg.org/#readable-stream-reader-generic-initialize
 func ReadableStreamReaderGenericInitialize(reader ReadableStreamGenericReader, stream *ReadableStream) {
-	// 1.
+	// 1. Set reader.[[stream]] to stream.
 	reader.SetStream(stream)
 
-	// 2.
+	// 2. Set stream.[[reader]] to reader.
 	stream.reader = reader
 
-	// 3.
 	promise, resolve, reject := stream.runtime.NewPromise()
 
 	switch stream.state {
+	// 3. If stream.[[state]] is "readable",
 	case ReadableStreamStateReadable:
+		// 3.1 Set reader.[[closedPromise]] to a new promise.
+		// Set later, as we need to set the resolve/reject functions as well.
+	// 4. Otherwise, if stream.[[state]] is "closed",
 	case ReadableStreamStateClosed:
+		// 4.1 Set reader.[[closedPromise]] to a promise resolved with undefined.
 		resolve(goja.Undefined())
+	// 5. Otherwise,
 	default:
+		// 5.1 Assert: stream.[[state]] is "errored".
 		if stream.state != ReadableStreamStateErrored {
 			common.Throw(stream.vu.Runtime(), newError(AssertionError, "stream.state is not \"errored\""))
 		}
 
+		// 5.2 Set reader.[[closedPromise]] to a promise rejected with stream.[[storedError]].
 		reject(stream.storedError)
+
+		// 5.3 Set reader.[[closedPromise]].[[PromiseIsHandled]] to true.
+		// FIXME: See https://github.com/dop251/goja/issues/565
+		var (
+			err       error
+			doNothing = func(goja.Value) {}
+		)
+		_, err = promiseThen(stream.vu.Runtime(), promise, doNothing, doNothing)
+		if err != nil {
+			common.Throw(stream.vu.Runtime(), newError(RuntimeError, err.Error()))
+		}
 	}
 
 	reader.SetClosed(promise, resolve, reject)

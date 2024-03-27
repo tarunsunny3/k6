@@ -12,9 +12,6 @@ import (
 type ReadableByteStreamController struct {
 	ByobRequest *ReadableStreamBYOBRequest
 
-	// FIXME: using a pointer to mark it as optional, find a better solution?
-	DesiredSize *int
-
 	// autoAllocateChunkSize holds a positive integer, when the automatic buffer allocation
 	// feature is enabled. In that case, this value specifies the size of buffer to allocate.
 	// It is set to 0 otherwise.
@@ -70,6 +67,34 @@ type ReadableByteStreamController struct {
 
 // Ensure that ReadableByteStreamController implements the ReadableStreamController interface.
 var _ ReadableStreamController = &ReadableByteStreamController{}
+
+// NewReadableByteStreamControllerObject creates a new [goja.Object] from a [ReadableByteStreamController] instance.
+func NewReadableByteStreamControllerObject(controller *ReadableByteStreamController) (*goja.Object, error) {
+	rt := controller.stream.runtime
+	obj := rt.NewObject()
+
+	err := obj.DefineAccessorProperty("desiredSize", rt.ToValue(func() goja.Value {
+		return rt.ToValue(controller.getDesiredSize())
+	}), nil, goja.FLAG_FALSE, goja.FLAG_TRUE)
+	if err != nil {
+		return nil, err
+	}
+
+	// Exposing the properties of the [ReadableStreamController] interface
+	if err := setReadOnlyPropertyOf(obj, "close", rt.ToValue(controller.Close)); err != nil {
+		return nil, err
+	}
+
+	if err := setReadOnlyPropertyOf(obj, "enqueue", rt.ToValue(controller.Enqueue)); err != nil {
+		return nil, err
+	}
+
+	if err := setReadOnlyPropertyOf(obj, "error", rt.ToValue(controller.Error)); err != nil {
+		return nil, err
+	}
+
+	return obj, nil
+}
 
 // Close implements the [specification]'s ReadableByteStreamController close() algorithm.
 //
@@ -1017,6 +1042,10 @@ func (controller *ReadableByteStreamController) resetQueue() {
 func (controller *ReadableByteStreamController) clearAlgorithms() {
 	controller.pullAlgorithm = nil
 	controller.cancelAlgorithm = nil
+}
+
+func (controller *ReadableByteStreamController) toObject() (*goja.Object, error) {
+	return NewReadableByteStreamControllerObject(controller)
 }
 
 type ReadableStreamBYOBRequest struct {

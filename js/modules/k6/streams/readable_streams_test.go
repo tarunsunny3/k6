@@ -11,18 +11,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func Test(t *testing.T) {
-	t.Parallel()
-
-	ts := newConfiguredRuntime(t)
-
-	gotErr := ts.EventLoop.Start(func() error {
-		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "test.js")
-	})
-
-	assert.NoError(t, gotErr)
-}
-
 func TestConstructor(t *testing.T) {
 	t.Parallel()
 
@@ -58,6 +46,19 @@ func TestBadUnderlyingSources(t *testing.T) {
 
 	assert.NoError(t, gotErr)
 }
+
+func TestReentrantStrategies(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "reentrant-strategies.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
+
 func newConfiguredRuntime(t testing.TB) *modulestest.Runtime {
 	var err error
 	runtime := modulestest.NewRuntimeForWPT(t)
@@ -73,6 +74,7 @@ func newConfiguredRuntime(t testing.TB) *modulestest.Runtime {
 
 	// TODO: Can we do this more generic, perhaps even part of the NewRuntimeForWPT signature?
 	err = runtime.VU.Runtime().Set("ReadableStream", m.Exports().Named["ReadableStream"])
+	err = runtime.VU.Runtime().Set("CountQueuingStrategy", m.Exports().Named["CountQueuingStrategy"])
 	require.NoError(t, err)
 
 	return runtime

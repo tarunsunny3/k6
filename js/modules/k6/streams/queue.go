@@ -34,7 +34,7 @@ func NewQueueWithSizes() *QueueWithSizes {
 //
 // [EnqueueValueWithSize]: https://streams.spec.whatwg.org/#enqueue-value-with-size
 func (q *QueueWithSizes) Enqueue(value goja.Value, size float64) error {
-	if size < 0 || math.IsInf(size, 1) { // Check for +Inf
+	if math.IsNaN(size) || size < 0 || math.IsInf(size, 1) { // Check for +Inf
 		return newError(RangeError, "size must be a finite, non-NaN number")
 	}
 

@@ -51,39 +51,42 @@ var _ ReadableStreamReader = &ReadableStreamDefaultReader{}
 func (reader *ReadableStreamDefaultReader) Read() *goja.Promise {
 	stream := reader.GetStream()
 
-	// 1.
+	// 1. If this.[[stream]] is undefined, return a promise rejected with a TypeError exception.
 	if stream == nil {
 		return newRejectedPromise(stream.vu, newError(TypeError, "stream is undefined"))
 	}
 
-	// 2.
+	// 2. Let promise be a new promise.
 	promise, resolve, reject := promises.New(stream.vu)
 
-	// 3.
-	// TODO: should this be wrapped in a goroutine? I assumed not, considering
-	// the call the callbacks is deferred to a later point in time, but I'm not sure.
+	// 3. Let readRequest be a new read request with the following items:
 	readRequest := ReadRequest{
 		chunkSteps: func(chunk any) {
 			go func() {
+				// Resolve promise with «[ "value" → chunk, "done" → false ]».
 				resolve(map[string]any{"value": chunk, "done": false})
 			}()
 		},
 		closeSteps: func() {
 			go func() {
+				// Resolve promise with «[ "value" → undefined, "done" → true ]».
 				resolve(map[string]any{"value": goja.Undefined(), "done": true})
 			}()
 		},
 		errorSteps: func(e any) {
 			go func() {
+				// Reject promise with e.
 				reject(e)
 			}()
 		},
 	}
 
-	// 4.
-	reader.read(readRequest)
+	// 4. Perform ! ReadableStreamDefaultReaderRead(this, readRequest).
+	go func() {
+		reader.read(readRequest)
+	}()
 
-	// 5.
+	// 5. Return promise.
 	return promise
 }
 
@@ -136,15 +139,15 @@ func (reader *ReadableStreamDefaultReader) ReleaseLock() {
 //
 // [SetUpReadableStreamDefaultReader]: https://streams.spec.whatwg.org/#set-up-readable-stream-default-reader
 func (reader *ReadableStreamDefaultReader) setup(stream *ReadableStream) {
-	// 1.
+	// 1. If ! IsReadableStreamLocked(stream) is true, throw a TypeError exception.
 	if stream.isLocked() {
 		common.Throw(reader.GetStream().vu.Runtime(), newError(TypeError, "stream is locked"))
 	}
 
-	// 2.
+	// 2. Perform ! ReadableStreamReaderGenericInitialize(reader, stream).
 	ReadableStreamReaderGenericInitialize(reader, stream)
 
-	// 3.
+	// 3. Set reader.[[readRequests]] to a new empty list.
 	reader.readRequests = []ReadRequest{}
 }
 
@@ -152,47 +155,49 @@ func (reader *ReadableStreamDefaultReader) setup(stream *ReadableStream) {
 //
 // [specification]: https://streams.spec.whatwg.org/#abstract-opdef-readablestreamdefaultreadererrorreadrequests
 func (reader *ReadableStreamDefaultReader) errorReadRequests(e any) {
-	// 1.
+	// 1. Let readRequests be reader.[[readRequests]].
 	readRequests := reader.readRequests
 
-	// 2.
+	// 2. Set reader.[[readRequests]] to a new empty list.
 	reader.readRequests = []ReadRequest{}
 
-	// 3.
+	// 3. For each readRequest of readRequests,
 	for _, request := range readRequests {
-		// 3.1.
+		// 3.1. Perform readRequest’s error steps, given e.
 		request.errorSteps(e)
 	}
 }
 
 // read implements the [ReadableStreamDefaultReaderRead] algorithm.
 //
-// [ReadableStreamDefaultReaderRead]: https://streams.spec.whatwg.org/#abstract-opdef-readablestreamdefaultreaderread
+// [ReadableStreamDefaultReaderRead]: https://streams.spec.whatwg.org/#readable-stream-default-reader-read
 func (reader *ReadableStreamDefaultReader) read(readRequest ReadRequest) {
-	// 1.
+	// 1. Let stream be reader.[[stream]].
 	stream := reader.GetStream()
 
-	// 2.
+	// 2. Assert: stream is not undefined.
 	if stream == nil {
 		common.Throw(stream.vu.Runtime(), newError(AssertionError, "stream is undefined"))
 	}
 
-	// 3.
+	// 3. Set stream.[[disturbed]] to true.
 	stream.disturbed = true
 
 	switch stream.state {
 	case ReadableStreamStateClosed:
-		// 4.
+		// 4. If stream.[[state]] is "closed", perform readRequest’s close steps.
 		readRequest.closeSteps()
 	case ReadableStreamStateErrored:
-		// 5.
+		// 5. Otherwise, if stream.[[state]] is "errored", perform readRequest’s error steps given stream.[[storedError]].
 		readRequest.errorSteps(stream.storedError)
 	default:
-		// 6.
+		// 6. Otherwise,
+		// 6.1. Assert: stream.[[state]] is "readable".
 		if stream.state != ReadableStreamStateReadable {
 			common.Throw(stream.vu.Runtime(), newError(AssertionError, "stream.state is not readable"))
 		}
 
+		// 6.2. Perform ! stream.[[controller]].[[PullSteps]](readRequest).
 		stream.controller.pullSteps(readRequest)
 	}
 }
