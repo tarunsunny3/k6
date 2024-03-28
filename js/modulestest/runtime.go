@@ -121,6 +121,11 @@ func NewRuntimeForWPT(t testing.TB) *Runtime {
 	var err error
 	runtime := NewRuntime(t)
 
+	// We want to make the [console.log()] available for Web Platform Tests, as it
+	// is very useful for debugging, because we don't have a real debugger for JS code.
+	logger := runtime.VU.InitEnvField.Logger
+	require.NoError(t, runtime.VU.RuntimeField.Set("console", newConsole(logger)))
+
 	// We compile the Web Platform Tests harness scripts into a goja.Program,
 	// and execute them in the goja runtime in order to make the Web Platform
 	// assertion functions available to the tests.
