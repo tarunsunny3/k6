@@ -246,7 +246,6 @@ func (controller *ReadableStreamDefaultController) enqueue(chunk goja.Value) err
 	} else { // 4. Otherwise,
 		// 4.1. Let result be the result of performing controller.[[strategySizeAlgorithm]], passing in chunk, and interpreting the result as a completion record.
 		size, err := controller.strategySizeAlgorithm(goja.Undefined(), chunk)
-
 		// 4.2 If result is an abrupt completion,
 		if err != nil {
 			// 4.2.1. Perform ! ReadableStreamDefaultControllerError(controller, result.[[Value]]).
@@ -463,7 +462,8 @@ func (controller *ReadableStreamDefaultController) getDesiredSize() null.Int {
 		return null.NewInt(0, true)
 	}
 
-	return null.NewInt(int64(int(controller.strategyHWM)-controller.queueTotalSize), true)
+	// FIXME @oleiade: this is the proper way to get the queue total size, we should probably get rid of controller.queueTotalSize?
+	return null.NewInt(int64(controller.strategyHWM-controller.queue.QueueTotalSize), true)
 }
 
 func (controller *ReadableStreamDefaultController) toObject() (*goja.Object, error) {

@@ -47,6 +47,18 @@ func TestBadUnderlyingSources(t *testing.T) {
 	assert.NoError(t, gotErr)
 }
 
+func TestCountQueuingStrategyIntegration(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "count-queuing-strategy-integration.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
+
 func TestGeneral(t *testing.T) {
 	t.Parallel()
 
