@@ -302,9 +302,9 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 	stream.setupDefaultController(controller, startAlgorithm, pullAlgorithm, cancelAlgorithm, highWaterMark, sizeAlgorithm)
 }
 
-// setupDefaultController implements the specification's [SetUpReadableStreamDefaultController()] abstract operation.
+// setupDefaultController implements the specification's [SetUpReadableStreamDefaultController] abstract operation.
 //
-// [SetUpReadableStreamDefaultController()]: https://streams.spec.whatwg.org/#set-up-readable-stream-default-controller
+// [SetUpReadableStreamDefaultController]: https://streams.spec.whatwg.org/#set-up-readable-stream-default-controller
 func (stream *ReadableStream) setupDefaultController(
 	controller *ReadableStreamDefaultController,
 	startAlgorithm UnderlyingSourceStartCallback,

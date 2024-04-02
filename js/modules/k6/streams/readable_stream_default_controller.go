@@ -59,7 +59,8 @@ type ReadableStreamDefaultController struct {
 // Ensure that ReadableStreamDefaultController implements the ReadableStreamController interface.
 var _ ReadableStreamController = &ReadableStreamDefaultController{}
 
-// NewReadableStreamDefaultControllerObject creates a new [goja.Object] from a [ReadableStreamDefaultController] instance.
+// NewReadableStreamDefaultControllerObject creates a new [goja.Object] from a
+// [ReadableStreamDefaultController] instance.
 func NewReadableStreamDefaultControllerObject(controller *ReadableStreamDefaultController) (*goja.Object, error) {
 	rt := controller.stream.runtime
 	obj := rt.NewObject()
@@ -69,7 +70,7 @@ func NewReadableStreamDefaultControllerObject(controller *ReadableStreamDefaultC
 		if !desiredSize.Valid {
 			return goja.Null()
 		}
-		return rt.ToValue(desiredSize.Int64)
+		return rt.ToValue(desiredSize.Float64)
 	}), nil, goja.FLAG_FALSE, goja.FLAG_TRUE)
 	if err != nil {
 		return nil, err
@@ -246,7 +247,6 @@ func (controller *ReadableStreamDefaultController) enqueue(chunk goja.Value) err
 	} else { // 4. Otherwise,
 		// 4.1. Let result be the result of performing controller.[[strategySizeAlgorithm]], passing in chunk, and interpreting the result as a completion record.
 		size, err := controller.strategySizeAlgorithm(goja.Undefined(), chunk)
-
 		// 4.2 If result is an abrupt completion,
 		if err != nil {
 			// 4.2.1. Perform ! ReadableStreamDefaultControllerError(controller, result.[[Value]]).
@@ -442,7 +442,7 @@ func (controller *ReadableStreamDefaultController) shouldCallPull() bool {
 	}
 
 	// 7. If desiredSize > 0, return true.
-	if desiredSize.Int64 > 0 {
+	if desiredSize.Float64 > 0 {
 		return true
 	}
 
@@ -450,18 +450,19 @@ func (controller *ReadableStreamDefaultController) shouldCallPull() bool {
 	return false
 }
 
-func (controller *ReadableStreamDefaultController) getDesiredSize() null.Int {
+func (controller *ReadableStreamDefaultController) getDesiredSize() null.Float {
 	state := controller.stream.state
 
 	if state == ReadableStreamStateErrored {
-		return null.NewInt(0, false)
+		return null.NewFloat(0, false)
 	}
 
 	if state == ReadableStreamStateClosed {
-		return null.NewInt(0, true)
+		return null.NewFloat(0, true)
 	}
 
-	return null.NewInt(int64(controller.strategyHWM-controller.queue.QueueTotalSize), true)
+	// FIXME @oleiade: this is the proper way to get the queue total size, we should probably get rid of controller.queueTotalSize?
+	return null.NewFloat(controller.strategyHWM-controller.queue.QueueTotalSize, true)
 }
 
 func (controller *ReadableStreamDefaultController) toObject() (*goja.Object, error) {
