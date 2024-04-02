@@ -57,8 +57,12 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	var err error
 
 	// 1. If underlyingSource is missing, set it to null.
-	var underlyingSource UnderlyingSource
-	var strategy *goja.Object
+	var underlyingSource *goja.Object = nil
+
+	var (
+		strategy             *goja.Object
+		underlyingSourceDict UnderlyingSource
+	)
 
 	// We look for the queuing strategy first, and validate it before
 	// the underlying source, in order to pass the Web Platform Tests
@@ -73,7 +77,8 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 		}
 
 		// Then we try to convert it to an UnderlyingSource
-		underlyingSource, err = NewUnderlyingSourceFromObject(runtime, call.Arguments[0].ToObject(runtime))
+		underlyingSource = call.Arguments[0].ToObject(runtime)
+		underlyingSourceDict, err = NewUnderlyingSourceFromObject(runtime, underlyingSource)
 		if err != nil {
 			common.Throw(runtime, err)
 		}
@@ -87,7 +92,7 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	stream.initialize()
 
 	// 4. If underlyingSourceDict["type"] is "bytes":
-	if underlyingSource.Type == "bytes" {
+	if underlyingSourceDict.Type == "bytes" {
 		// 4.1. If strategy["size"] exists, throw a RangeError exception.
 		if strategy.Get("size") != nil {
 			common.Throw(runtime, newError(RangeError, "size function must not be set for byte streams"))
@@ -97,10 +102,10 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 		highWaterMark := extractHighWaterMark(runtime, strategy, 0)
 
 		// 4.3. Perform ? SetUpReadableByteStreamControllerFromUnderlyingSource(this, underlyingSource, underlyingSourceDict, highWaterMark).
-		stream.setupReadableByteStreamControllerFromUnderlyingSource(underlyingSource, highWaterMark)
+		stream.setupReadableByteStreamControllerFromUnderlyingSource(underlyingSource, underlyingSourceDict, highWaterMark)
 	} else { // 5. Otherwise,
 		// 5.1. Assert: underlyingSourceDict["type"] does not exist.
-		if underlyingSource.Type != "" {
+		if underlyingSourceDict.Type != "" {
 			common.Throw(runtime, newError(AssertionError, "type must not be set for non-byte streams"))
 		}
 
@@ -111,7 +116,7 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 		highWaterMark := extractHighWaterMark(runtime, strategy, 1)
 
 		// 5.4. Perform ? SetUpReadableStreamDefaultControllerFromUnderlyingSource(this, underlyingSource, underlyingSourceDict, highWaterMark, sizeAlgorithm).
-		stream.setupReadableStreamDefaultControllerFromUnderlyingSource(underlyingSource, highWaterMark, sizeAlgorithm)
+		stream.setupReadableStreamDefaultControllerFromUnderlyingSource(underlyingSource, underlyingSourceDict, highWaterMark, sizeAlgorithm)
 	}
 
 	return runtime.ToValue(stream).ToObject(runtime)

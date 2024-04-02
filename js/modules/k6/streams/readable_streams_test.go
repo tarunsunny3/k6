@@ -5,6 +5,7 @@ import (
 
 	"github.com/dop251/goja"
 	"go.k6.io/k6/js/compiler"
+	"go.k6.io/k6/js/modules/k6"
 	"go.k6.io/k6/js/modulestest"
 
 	"github.com/stretchr/testify/assert"
@@ -88,7 +89,10 @@ func newConfiguredRuntime(t testing.TB) *modulestest.Runtime {
 	runtime := modulestest.NewRuntimeForWPT(t)
 
 	err = runtime.SetupModuleSystem(
-		map[string]interface{}{"k6/x/streams": New()},
+		map[string]interface{}{
+			"k6/x/streams": New(),
+			"k6":           k6.New(),
+		},
 		nil,
 		compiler.New(runtime.VU.InitEnv().Logger),
 	)

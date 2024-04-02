@@ -1,6 +1,8 @@
 package streams
 
 import (
+	"errors"
+
 	"github.com/dop251/goja"
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
@@ -38,6 +40,9 @@ type ReadableStream struct {
 
 	// storedError holds the error that caused the stream to be errored
 	storedError any
+
+	// FIXME: Do we really need it? Some WPTs manipulate this.
+	Source any
 
 	runtime *goja.Runtime
 	vu      modules.VU
@@ -87,7 +92,7 @@ func (stream *ReadableStream) GetReader(options *goja.Object) goja.Value {
 
 	// 2. Assert: options["mode"] is "byob".
 	if options.Get("mode").String() != ReaderTypeByob {
-		common.Throw(stream.runtime, newError(AssertionError, "options.mode is not 'byob'"))
+		common.Throw(stream.runtime, newError(TypeError, "options.mode is not 'byob'"))
 	}
 
 	// 3. Return ? AcquireReadableStreamBYOBReader(this).
@@ -147,7 +152,8 @@ func (stream *ReadableStream) initialize() {
 // [specification]: https://streams.spec.whatwg.org/#set-up-readable-byte-stream-controller-from-underlying-source
 // FIXME: Try to unify it with setupReadableStreamDefaultControllerFromUnderlyingSource.
 func (stream *ReadableStream) setupReadableByteStreamControllerFromUnderlyingSource(
-	underlyingSource UnderlyingSource,
+	_ goja.Value,
+	underlyingSourceDict UnderlyingSource,
 	highWaterMark float64,
 ) {
 	// 1. Let controller be a new ReadableByteStreamController.
@@ -171,19 +177,19 @@ func (stream *ReadableStream) setupReadableByteStreamControllerFromUnderlyingSou
 	// 5. If underlyingSourceDict["start"] exists, then set startAlgorithm to an algorithm
 	// which returns the result of invoking underlyingSourceDict["start"] with argument
 	// list « controller » and callback this value underlyingSource.
-	if underlyingSource.startSet {
+	if underlyingSourceDict.startSet {
 		startAlgorithm = func(obj *goja.Object) (v goja.Value) {
-			return underlyingSource.Start(obj)
+			return underlyingSourceDict.Start(obj)
 		}
 	}
 
 	// 6. If underlyingSourceDict["pull"] exists, then set pullAlgorithm to an algorithm
 	// which returns the result of invoking underlyingSourceDict["pull"] with argument
 	// list « controller » and callback this value underlyingSource.
-	if underlyingSource.pullSet {
+	if underlyingSourceDict.pullSet {
 		pullAlgorithm = func(obj *goja.Object) (p *goja.Promise) {
 			if e := stream.runtime.Try(func() {
-				p = underlyingSource.Pull(obj)
+				p = underlyingSourceDict.Pull(obj)
 			}); e != nil {
 				return newRejectedPromise(stream.vu, e.Value())
 			}
@@ -198,14 +204,14 @@ func (stream *ReadableStream) setupReadableByteStreamControllerFromUnderlyingSou
 	// 7. If underlyingSourceDict["cancel"] exists, then set cancelAlgorithm to an algorithm
 	// which takes an argument reason and returns the result of invoking underlyingSourceDict["cancel"]
 	// with argument list « reason » and callback this value underlyingSource.
-	if underlyingSource.cancelSet {
+	if underlyingSourceDict.cancelSet {
 		cancelAlgorithm = func(reason any) *goja.Promise {
-			return underlyingSource.Cancel(reason)
+			return underlyingSourceDict.Cancel(reason)
 		}
 	}
 
 	// 8. Let autoAllocateChunkSize be underlyingSourceDict["autoAllocateChunkSize"], if it exists, or undefined otherwise.
-	autoAllocateChunkSize := underlyingSource.AutoAllocateChunkSize
+	autoAllocateChunkSize := underlyingSourceDict.AutoAllocateChunkSize
 
 	// 9. If autoAllocateChunkSize is 0, then throw a TypeError exception.
 	if autoAllocateChunkSize.Valid && autoAllocateChunkSize.Int64 == 0 {
@@ -220,7 +226,12 @@ func (stream *ReadableStream) setupReadableByteStreamControllerFromUnderlyingSou
 // SetUpReadableStreamDefaultController abstract operation.
 //
 // [specification]: https://streams.spec.whatwg.org/#set-up-readable-stream-default-controller-from-underlying-source
-func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlyingSource(underlyingSource UnderlyingSource, highWaterMark float64, sizeAlgorithm SizeAlgorithm) {
+func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlyingSource(
+	underlyingSource goja.Value,
+	underlyingSourceDict UnderlyingSource,
+	highWaterMark float64,
+	sizeAlgorithm SizeAlgorithm,
+) {
 	// 1. Let controller be a new ReadableStreamDefaultController.
 	controller := &ReadableStreamDefaultController{}
 
@@ -242,19 +253,31 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 	// 5. If underlyingSourceDict["start"] exists, then set startAlgorithm to an algorithm
 	// which returns the result of invoking underlyingSourceDict["start"] with argument
 	// list « controller » and callback this value underlyingSource.
-	if underlyingSource.startSet {
+	if underlyingSourceDict.startSet {
+		call, ok := goja.AssertFunction(stream.runtime.ToValue(underlyingSourceDict.Start))
+		if !ok {
+			common.Throw(stream.runtime, errors.New("underlyingSource.[[start]] must be a function"))
+		}
+
 		startAlgorithm = func(obj *goja.Object) (v goja.Value) {
-			return underlyingSource.Start(obj)
+			var err error
+			v, err = call(underlyingSource, obj)
+			// FIXME: Do something meaningful with error
+			if err != nil {
+				panic(err)
+			}
+
+			return v
 		}
 	}
 
 	// 6. If underlyingSourceDict["pull"] exists, then set pullAlgorithm to an algorithm which
 	// returns the result of invoking underlyingSourceDict["pull"] with argument list
 	// « controller » and callback this value underlyingSource.
-	if underlyingSource.pullSet {
+	if underlyingSourceDict.pullSet {
 		pullAlgorithm = func(obj *goja.Object) (p *goja.Promise) {
 			if e := stream.runtime.Try(func() {
-				p = underlyingSource.Pull(obj)
+				p = underlyingSourceDict.Pull(obj)
 			}); e != nil {
 				return newRejectedPromise(stream.vu, e.Value())
 			}
@@ -269,9 +292,9 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 	// 7. If underlyingSourceDict["cancel"] exists, then set cancelAlgorithm to an algorithm which takes an argument
 	// reason and returns the result of invoking underlyingSourceDict["cancel"] with argument list « reason » and
 	// callback this value underlyingSource.
-	if underlyingSource.cancelSet {
+	if underlyingSourceDict.cancelSet {
 		cancelAlgorithm = func(reason any) *goja.Promise {
-			return underlyingSource.Cancel(reason)
+			return underlyingSourceDict.Cancel(reason)
 		}
 	}
 
@@ -290,9 +313,11 @@ func (stream *ReadableStream) setupDefaultController(
 	highWaterMark float64,
 	sizeAlgorithm SizeAlgorithm,
 ) {
+	rt := stream.vu.Runtime()
+
 	// 1. Assert: stream.[[controller]] is undefined.
 	if stream.controller != nil {
-		common.Throw(stream.vu.Runtime(), newError(AssertionError, "stream.[[controller]] is not undefined"))
+		common.Throw(rt, newError(AssertionError, "stream.[[controller]] is not undefined"))
 	}
 
 	// 2. Set controller.[[stream]] to stream.
@@ -330,7 +355,9 @@ func (stream *ReadableStream) setupDefaultController(
 
 	// 10. Let startPromise be a promise with startResult.
 	var startPromise *goja.Promise
-	if p, ok := startResult.Export().(*goja.Promise); ok {
+	if common.IsNullish(startResult) {
+		startPromise = newResolvedPromise(controller.stream.vu, startResult)
+	} else if p, ok := startResult.Export().(*goja.Promise); ok {
 		startPromise = p
 	} else {
 		startPromise = newResolvedPromise(controller.stream.vu, startResult)

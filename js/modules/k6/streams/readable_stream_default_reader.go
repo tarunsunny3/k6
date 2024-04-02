@@ -82,9 +82,11 @@ func (reader *ReadableStreamDefaultReader) Read() *goja.Promise {
 	}
 
 	// 4. Perform ! ReadableStreamDefaultReaderRead(this, readRequest).
-	go func() {
+	enqueueCallback := reader.stream.vu.RegisterCallback()
+	enqueueCallback(func() error {
 		reader.read(readRequest)
-	}()
+		return nil
+	})
 
 	// 5. Return promise.
 	return promise

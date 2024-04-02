@@ -346,10 +346,8 @@ func (controller *ReadableStreamDefaultController) resetQueue() {
 	// ReadableStreamDefaultController.queue && ReadableStreamDefaultController.queueTotalSize
 
 	// 2. Set container.[[queue]] to a new empty list.
-	controller.queue = NewQueueWithSizes()
-
 	// 3. Set container.[[queueTotalSize]] to 0.
-	controller.queueTotalSize = 0
+	controller.queue = NewQueueWithSizes()
 }
 
 // callPullIfNeeded implements the [specification]'s ReadableStreamDefaultControllerCallPullIfNeeded algorithm
@@ -405,7 +403,7 @@ func (controller *ReadableStreamDefaultController) callPullIfNeeded() {
 		// 8. Upon rejection of pullPromise with reason e,
 		func(reason goja.Value) {
 			// 8.1. Perform ! ReadableStreamDefaultControllerError(controller, e).
-			controller.error(reason.Export())
+			controller.error(reason)
 		},
 	)
 	if err != nil {
@@ -463,7 +461,7 @@ func (controller *ReadableStreamDefaultController) getDesiredSize() null.Int {
 		return null.NewInt(0, true)
 	}
 
-	return null.NewInt(int64(int(controller.strategyHWM)-controller.queueTotalSize), true)
+	return null.NewInt(int64(controller.strategyHWM-controller.queue.QueueTotalSize), true)
 }
 
 func (controller *ReadableStreamDefaultController) toObject() (*goja.Object, error) {
