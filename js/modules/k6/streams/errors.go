@@ -1,5 +1,7 @@
 package streams
 
+import "github.com/dop251/goja"
+
 func newError(k errorKind, message string) *streamError {
 	return &streamError{
 		Name:    k.String(),
@@ -42,4 +44,16 @@ var _ error = (*streamError)(nil)
 
 func (e *streamError) Error() string {
 	return e.Name + ":" + e.Message
+}
+
+// FIXME: @joanlopez - Is that the expected behavior? Revisit common.Throw usages.
+func throw(rt *goja.Runtime, err any) {
+	panic(errToObj(rt, err))
+}
+
+func errToObj(rt *goja.Runtime, err any) *goja.Object {
+	if e, ok := err.(*goja.Exception); ok { //nolint:errorlint // we don't really want to unwrap here
+		return e.Value().ToObject(rt)
+	}
+	return rt.ToValue(err).ToObject(rt)
 }

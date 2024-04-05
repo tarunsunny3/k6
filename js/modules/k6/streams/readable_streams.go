@@ -279,11 +279,11 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 			if e := stream.runtime.Try(func() {
 				p = underlyingSourceDict.Pull(obj)
 			}); e != nil {
-				return newRejectedPromise(stream.vu, e.Value())
+				p = newRejectedPromise(stream.vu, e.Value())
 			}
 
 			if p == nil {
-				p, _, _ = promises.New(stream.vu)
+				p = newResolvedPromise(stream.vu, goja.Undefined())
 			}
 			return p
 		}
@@ -293,8 +293,17 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 	// reason and returns the result of invoking underlyingSourceDict["cancel"] with argument list « reason » and
 	// callback this value underlyingSource.
 	if underlyingSourceDict.cancelSet {
-		cancelAlgorithm = func(reason any) *goja.Promise {
-			return underlyingSourceDict.Cancel(reason)
+		cancelAlgorithm = func(reason any) (p *goja.Promise) {
+			if e := stream.runtime.Try(func() {
+				p = underlyingSourceDict.Cancel(reason)
+			}); e != nil {
+				p = newRejectedPromise(stream.vu, e.Value())
+			}
+
+			if p == nil {
+				p = newResolvedPromise(stream.vu, goja.Undefined())
+			}
+			return p
 		}
 	}
 
@@ -608,7 +617,7 @@ func (stream *ReadableStream) cancel(reason goja.Value) *goja.Promise {
 	sourceCancelPromise := stream.controller.cancelSteps(reason)
 
 	// 8. Return the result of reacting to sourceCancelPromise with a fulfillment step that returns undefined.
-	promise, err := promiseThen(stream.vu.Runtime(), sourceCancelPromise,
+	_, err := promiseThen(stream.vu.Runtime(), sourceCancelPromise,
 		// Mimicking Deno's implementation: https://github.com/denoland/deno/blob/main/ext/web/06_streams.js#L405
 		func(goja.Value) {},
 		func(err goja.Value) {},
@@ -617,7 +626,7 @@ func (stream *ReadableStream) cancel(reason goja.Value) *goja.Promise {
 		common.Throw(stream.vu.Runtime(), err)
 	}
 
-	return promise
+	return sourceCancelPromise
 }
 
 // close implements the specification's [ReadableStreamClose()] abstract operation.

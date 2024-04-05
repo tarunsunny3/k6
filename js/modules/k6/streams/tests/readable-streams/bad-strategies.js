@@ -1,3 +1,4 @@
+// Original source file: https://github.com/web-platform-tests/wpt/blob/f0d6f241e3a16ddd6e0a3ebcd9cb814b408bc5a6/streams/readable-streams/bad-strategies.any.js
 // META: global=window,worker,shadowrealm
 'use strict';
 
@@ -69,31 +70,28 @@ promise_test(t => {
 
 }, 'Readable stream: strategy.size errors the stream and then returns Infinity');
 
-// FIXME @oleiade: make this pass.
-// NOTE @oleiade the last assertion does not pass at the moment, the stream is errored but the we do not
-// throw the original error
-// promise_test(() => {
-//
-// 	const theError = new Error('a unique string');
-// 	const rs = new ReadableStream(
-// 		{
-// 			start(c) {
-// 				assert_throws_exactly(theError, () => c.enqueue('a'), 'enqueue should throw the error');
-// 			}
-// 		},
-// 		{
-// 			size() {
-// 				throw theError;
-// 			},
-// 			highWaterMark: 5
-// 		}
-// 	);
-//
-// 	return rs.getReader().closed.catch(e => {
-// 		assert_equals(e, theError, 'closed should reject with the error');
-// 	});
-//
-// }, 'Readable stream: throwing strategy.size method');
+promise_test(() => {
+
+	const theError = new Error('a unique string');
+	const rs = new ReadableStream(
+		{
+			start(c) {
+				assert_throws_exactly(theError, () => c.enqueue('a'), 'enqueue should throw the error');
+			}
+		},
+		{
+			size() {
+				throw theError;
+			},
+			highWaterMark: 5
+		}
+	);
+
+	return rs.getReader().closed.catch(e => {
+		assert_equals(e, theError, 'closed should reject with the error');
+	});
+
+}, 'Readable stream: throwing strategy.size method');
 
 test(() => {
 
@@ -127,75 +125,74 @@ test(() => {
 
 }, 'Readable stream: invalid strategy.highWaterMark');
 
-// FIXME @oleiade: make this pass
-// promise_test(() => {
-//
-// 	const promises = [];
-// 	for (const size of [NaN, -Infinity, Infinity, -1]) {
-// 		let theError;
-// 		const rs = new ReadableStream(
-// 			{
-// 				start(c) {
-// 					try {
-// 						c.enqueue('hi');
-// 						assert_unreached('enqueue didn\'t throw');
-// 					} catch (error) {
-// 						assert_equals(error.name, 'RangeError', 'enqueue should throw a RangeError for ' + size);
-// 						theError = error;
-// 					}
-// 				}
-// 			},
-// 			{
-// 				size() {
-// 					return size;
-// 				},
-// 				highWaterMark: 5
-// 			}
-// 		);
-//
-// 		promises.push(rs.getReader().closed.then(() => {
-// 			assert_unreached('closed didn\'t throw');
-// 		}, e => {
-// 			assert_equals(e, theError, 'closed should reject with the error for ' + size);
-// 		}));
-// 	}
-//
-// 	return Promise.all(promises);
-//
-// }, 'Readable stream: invalid strategy.size return value');
-//
-// promise_test(() => {
-//
-// 	const promises = [];
-// 	for (const size of [NaN, -Infinity, Infinity, -1]) {
-// 		let theError;
-// 		const rs = new ReadableStream(
-// 			{
-// 				pull(c) {
-// 					try {
-// 						c.enqueue('hi');
-// 						assert_unreached('enqueue didn\'t throw');
-// 					} catch (error) {
-// 						assert_equals(error.name, 'RangeError', 'enqueue should throw a RangeError for ' + size);
-// 						theError = error;
-// 					}
-// 				}
-// 			},
-// 			{
-// 				size() {
-// 					return size;
-// 				},
-// 				highWaterMark: 5
-// 			}
-// 		);
-//
-// 		promises.push(rs.getReader().closed.then(() => {
-// 			assert_unreached('closed didn\'t throw');
-// 		}, e => {
-// 			assert_equals(e, theError, 'closed should reject with the error for ' + size);
-// 		}));
-// 	}
-//
-// 	return Promise.all(promises);
-//
-// }, 'Readable stream: invalid strategy.size return value when pulling');
+promise_test(() => {
+
+	const promises = [];
+	for (const size of [NaN, -Infinity, Infinity, -1]) {
+		let theError;
+		const rs = new ReadableStream(
+			{
+				start(c) {
+					try {
+						c.enqueue('hi');
+						assert_unreached('enqueue didn\'t throw');
+					} catch (error) {
+						assert_equals(error.name, 'RangeError', 'enqueue should throw a RangeError for ' + size);
+						theError = error;
+					}
+				}
+			},
+			{
+				size() {
+					return size;
+				},
+				highWaterMark: 5
+			}
+		);
+
+		promises.push(rs.getReader().closed.then(() => {
+			assert_unreached('closed didn\'t throw');
+		}, e => {
+			assert_equals(e, theError, 'closed should reject with the error for ' + size);
+		}));
+	}
+
+	return Promise.all(promises);
+
+}, 'Readable stream: invalid strategy.size return value');
+
+promise_test(() => {
+
+	const promises = [];
+	for (const size of [NaN, -Infinity, Infinity, -1]) {
+		let theError;
+		const rs = new ReadableStream(
+			{
+				pull(c) {
+					try {
+						c.enqueue('hi');
+						assert_unreached('enqueue didn\'t throw');
+					} catch (error) {
+						assert_equals(error.name, 'RangeError', 'enqueue should throw a RangeError for ' + size);
+						theError = error;
+					}
+				}
+			},
+			{
+				size() {
+					return size;
+				},
+				highWaterMark: 5
+			}
+		);
+
+		promises.push(rs.getReader().closed.then(() => {
+			assert_unreached('closed didn\'t throw');
+		}, e => {
+			assert_equals(e, theError, 'closed should reject with the error for ' + size);
+		}));
+	}
+
+	return Promise.all(promises);
+
+}, 'Readable stream: invalid strategy.size return value when pulling');

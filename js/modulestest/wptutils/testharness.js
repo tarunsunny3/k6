@@ -434,17 +434,21 @@ function assert_throws_js_impl(constructor, func, description,
 		//
 		// Instead, we check that the error object has the shape we give it when we throw it.
 		// Namely, that it has a name property that matches the name of the expected constructor.
-		assert('value' in e,
-			assertion_type, description,
-			"${func} threw ${e} without a value property",
-			{func: func, e: e});
 
-		assert('name' in e.value,
+		// FIXME @joanlopez - do we really need this assertion? Always valid?
+		// assert('value' in e,
+		// 	assertion_type, description,
+		// 	"${func} threw ${e} without a value property",
+		// 	{func: func, e: e});
+		//
+		//assert('name' in e.value,
+		// Do we really need a wrapper?
+		assert('name' in e,
 			assertion_type, description,
 			"${func} threw ${e} without a name property",
 			{func: func, e: e});
 
-		assert(e.value.name === constructor.name,
+		assert(e.name === constructor.name,
 			assertion_type, description,
 			"${func} threw ${e} with name ${e.name}, not ${constructor.name}",
 			{func: func, e: e, constructor: constructor});

@@ -58,65 +58,62 @@ promise_test(t => {
 
 }, 'Underlying source: throwing pull method (initial pull)');
 
-// FIXME @joanlopez: make this pass.
-// Infinite loop, second read never happens?
-// promise_test(t => {
-//
-// 	const theError = new Error('a unique string');
-//
-// 	let counter = 0;
-// 	const rs = new ReadableStream({
-// 		get pull() {
-// 			++counter;
-// 			if (counter === 1) {
-// 				return c => c.enqueue('a');
-// 			}
-//
-// 			throw theError;
-// 		}
-// 	});
-// 	const reader = rs.getReader();
-//
-// 	return Promise.all([
-// 		reader.read().then(r => {
-// 			assert_object_equals(r, { value: 'a', done: false }, 'the first chunk read should be correct');
-// 		}),
-// 		reader.read().then(r => {
-// 			assert_object_equals(r, { value: 'a', done: false }, 'the second chunk read should be correct');
-// 			assert_equals(counter, 1, 'counter should be 1');
-// 		})
-// 	]);
-//
-// }, 'Underlying source pull: throwing getter (second pull does not result in a second get)');
 
-// FIXME @joanlopez: make this pass.
-// Infinite loop, second read never happens?
-// promise_test(t => {
-//
-// 	const theError = new Error('a unique string');
-//
-// 	let counter = 0;
-// 	const rs = new ReadableStream({
-// 		pull(c) {
-// 			++counter;
-// 			if (counter === 1) {
-// 				c.enqueue('a');
-// 				return;
-// 			}
-//
-// 			throw theError;
-// 		}
-// 	});
-// 	const reader = rs.getReader();
-//
-// 	return Promise.all([
-// 		reader.read().then(r => {
-// 			assert_object_equals(r, { value: 'a', done: false }, 'the chunk read should be correct');
-// 		}),
-// 		promise_rejects_exactly(t, theError, reader.closed)
-// 	]);
-//
-// }, 'Underlying source pull: throwing method (second pull)');
+promise_test(t => {
+
+	const theError = new Error('a unique string');
+
+	let counter = 0;
+	const rs = new ReadableStream({
+		get pull() {
+			++counter;
+			if (counter === 1) {
+				return c => c.enqueue('a');
+			}
+
+			throw theError;
+		}
+	});
+	const reader = rs.getReader();
+
+	return Promise.all([
+		reader.read().then(r => {
+			assert_object_equals(r, { value: 'a', done: false }, 'the first chunk read should be correct');
+		}),
+		reader.read().then(r => {
+			assert_object_equals(r, { value: 'a', done: false }, 'the second chunk read should be correct');
+			assert_equals(counter, 1, 'counter should be 1');
+		})
+	]);
+
+}, 'Underlying source pull: throwing getter (second pull does not result in a second get)');
+
+promise_test(t => {
+
+	const theError = new Error('a unique string');
+
+	let counter = 0;
+	const rs = new ReadableStream({
+		pull(c) {
+			++counter;
+			if (counter === 1) {
+				c.enqueue('a');
+				return;
+			}
+
+			throw theError;
+		}
+	});
+	const reader = rs.getReader();
+
+	return Promise.all([
+		reader.read().then(r => {
+			assert_object_equals(r, { value: 'a', done: false }, 'the chunk read should be correct');
+		}),
+		promise_rejects_exactly(t, theError, reader.closed)
+	]);
+
+}, 'Underlying source pull: throwing method (second pull)');
 
 test(() => {
 
@@ -129,18 +126,18 @@ test(() => {
 
 }, 'Underlying source cancel: throwing getter');
 
-// promise_test(t => {
-//
-// 	const theError = new Error('a unique string');
-// 	const rs = new ReadableStream({
-// 		cancel() {
-// 			throw theError;
-// 		}
-// 	});
-//
-// 	return promise_rejects_exactly(t, theError, rs.cancel());
-//
-// }, 'Underlying source cancel: throwing method');
+promise_test(t => {
+
+	const theError = new Error('a unique string');
+	const rs = new ReadableStream({
+		cancel() {
+			throw theError;
+		}
+	});
+
+	return promise_rejects_exactly(t, theError, rs.cancel());
+
+}, 'Underlying source cancel: throwing method');
 
 promise_test(() => {
 
@@ -212,6 +209,7 @@ promise_test(() => {
 
 }, 'Underlying source: calling close twice on an empty stream should throw the second time');
 
+// FIXME: @joanlopez - the issue is with the order of execution: closed, read
 // promise_test(() => {
 //
 // 	let startCalled = false;
@@ -379,11 +377,9 @@ promise_test(() => {
 }, 'Underlying source: calling error and returning a rejected promise from pull should cause the stream to error ' +
 	'with the first error');
 
-const error1 = {name: 'error1'};
+const error1 = { name: 'error1' };
 
-// FIXME @joanlopez: make this pass.
-// To be honest, I don't even get why it should pass.
-// Can we revise it?
+// FIXME: @joanlopez - pullShouldThrow is assigned before the first pull
 // promise_test(t => {
 //
 // 	let pullShouldThrow = false;

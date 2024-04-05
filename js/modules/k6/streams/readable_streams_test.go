@@ -12,18 +12,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestConstructor(t *testing.T) {
-	t.Parallel()
-
-	ts := newConfiguredRuntime(t)
-
-	gotErr := ts.EventLoop.Start(func() error {
-		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "constructor.js")
-	})
-
-	assert.NoError(t, gotErr)
-}
-
 func TestBadStrategies(t *testing.T) {
 	t.Parallel()
 
@@ -43,6 +31,18 @@ func TestBadUnderlyingSources(t *testing.T) {
 
 	gotErr := ts.EventLoop.Start(func() error {
 		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "bad-underlying-sources.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
+
+func TestConstructor(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "constructor.js")
 	})
 
 	assert.NoError(t, gotErr)

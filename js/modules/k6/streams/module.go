@@ -216,7 +216,7 @@ func extractHighWaterMark(rt *goja.Runtime, strategy *goja.Object, defaultHWM fl
 
 	// 3. If highWaterMark is NaN or highWaterMark < 0, throw a RangeError exception.
 	if goja.IsNaN(strategy.Get("highWaterMark")) || !isNumber(strategy.Get("highWaterMark")) || !isNonNegativeNumber(strategy.Get("highWaterMark")) {
-		common.Throw(rt, newError(RangeError, "highWaterMark must be a non-negative number"))
+		throw(rt, newError(RangeError, "highWaterMark must be a non-negative number"))
 	}
 
 	// 4. Return highWaterMark.

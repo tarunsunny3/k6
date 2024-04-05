@@ -100,7 +100,7 @@ func NewReadableStreamDefaultControllerObject(controller *ReadableStreamDefaultC
 func (controller *ReadableStreamDefaultController) Close() {
 	// 1.
 	if !controller.canCloseOrEnqueue() {
-		common.Throw(controller.stream.vu.Runtime(), newError(TypeError, "cannot close or enqueue"))
+		throw(controller.stream.vu.Runtime(), newError(TypeError, "cannot close or enqueue"))
 	}
 
 	// 2.
@@ -115,12 +115,12 @@ func (controller *ReadableStreamDefaultController) Close() {
 func (controller *ReadableStreamDefaultController) Enqueue(chunk goja.Value) {
 	// 1. If ! ReadableStreamDefaultControllerCanCloseOrEnqueue(this) is false, throw a TypeError exception.
 	if !controller.canCloseOrEnqueue() {
-		common.Throw(controller.stream.vu.Runtime(), newError(TypeError, "cannot close or enqueue"))
+		throw(controller.stream.vu.Runtime(), newError(TypeError, "cannot close or enqueue"))
 	}
 
 	// 2. Perform ? ReadableStreamDefaultControllerEnqueue(this, chunk).
 	if err := controller.enqueue(chunk); err != nil {
-		common.Throw(controller.stream.vu.Runtime(), err)
+		throw(controller.stream.vu.Runtime(), err)
 	}
 }
 

@@ -147,7 +147,7 @@ func ReadableStreamReaderGenericInitialize(reader ReadableStreamGenericReader, s
 		}
 
 		// 5.2 Set reader.[[closedPromise]] to a promise rejected with stream.[[storedError]].
-		reject(stream.storedError)
+		reject(errToObj(stream.runtime, stream.storedError))
 
 		// 5.3 Set reader.[[closedPromise]].[[PromiseIsHandled]] to true.
 		// FIXME: See https://github.com/dop251/goja/issues/565
