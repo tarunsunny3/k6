@@ -334,6 +334,29 @@ function assert_array_equals(actual, expected, description) {
 }
 
 /**
+ * Assert that ``actual`` is a number greater than ``expected``.
+ *
+ * @param {number} actual - Test value.
+ * @param {number} expected - Number that ``actual`` must be greater than.
+ * @param {string} [description] - Description of the condition being tested.
+ */
+function assert_greater_than(actual, expected, description)
+{
+	/*
+	 * Test if a primitive number is greater than another
+	 */
+	assert(typeof actual === "number",
+		"assert_greater_than", description,
+		"expected a number but got a ${type_actual}",
+		{type_actual:typeof actual});
+
+	assert(actual > expected,
+		"assert_greater_than", description,
+		"expected a number greater than ${expected} but got ${actual}",
+		{expected:expected, actual:actual});
+}
+
+/**
  * Assert the provided value is thrown.
  *
  * @param {value} exception The expected exception.

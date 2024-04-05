@@ -131,7 +131,6 @@ const (
 // isLocked implements the specification's [IsReadableStreamLocked()] abstract operation.
 //
 // [IsReadableStreamLocked()]: https://streams.spec.whatwg.org/#is-readable-stream-locked
-// FIXME: This should be called when getting the stream.locked property
 func (stream *ReadableStream) isLocked() bool {
 	return stream.reader != nil
 }
@@ -578,26 +577,26 @@ func (stream *ReadableStream) addReadRequest(readRequest ReadRequest) {
 //
 // [ReadableStreamCancel()]: https://streams.spec.whatwg.org/#readable-stream-cancel
 func (stream *ReadableStream) cancel(reason goja.Value) *goja.Promise {
-	// 1.
+	// 1. Set stream.[[disturbed]] to true.
 	stream.disturbed = true
 
-	// 2.
+	// 2. If stream.[[state]] is "closed", return a promise resolved with undefined.
 	if stream.state == ReadableStreamStateClosed {
 		return newResolvedPromise(stream.vu, goja.Undefined())
 	}
 
-	// 3.
+	// 3. If stream.[[state]] is "errored", return a promise rejected with stream.[[storedError]].
 	if stream.state == ReadableStreamStateErrored {
 		return newRejectedPromise(stream.vu, stream.storedError)
 	}
 
-	// 4.
+	// 4. Perform ! ReadableStreamClose(stream).
 	stream.close()
 
-	// 5.
+	// 5. Let reader be stream.[[reader]].
 	reader := stream.reader
 
-	// 6.
+	// 6. If reader is not undefined and reader implements ReadableStreamBYOBReader,
 	byobReader, isBYOBReader := reader.(ReadableStreamBYOBReader)
 	if reader != nil && isBYOBReader {
 		// 6.1. Let readIntoRequests be reader.[[readIntoRequests]].

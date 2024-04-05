@@ -80,10 +80,6 @@ func (reader *BaseReadableStreamReader) SetClosed(p *goja.Promise, resolve func(
 
 // Cancel returns a [goja.Promise] that resolves when the stream is canceled.
 func (reader *BaseReadableStreamReader) Cancel(reason goja.Value) *goja.Promise {
-	if reader.stream == nil {
-		return newRejectedPromise(reader.stream.vu, newError(TypeError, "stream is undefined"))
-	}
-
 	return reader.cancel(reason)
 }
 
@@ -91,15 +87,15 @@ func (reader *BaseReadableStreamReader) Cancel(reason goja.Value) *goja.Promise 
 //
 // [specification]: https://streams.spec.whatwg.org/#readable-stream-reader-generic-cancel
 func (reader *BaseReadableStreamReader) cancel(reason goja.Value) *goja.Promise {
-	// 1.
+	// 1. Let stream be reader.[[stream]].
 	stream := reader.stream
 
-	// 2.
+	// 2. Assert: stream is not undefined.
 	if stream == nil {
-		common.Throw(reader.stream.vu.Runtime(), newError(AssertionError, "stream is not undefined"))
+		common.Throw(reader.stream.vu.Runtime(), newError(AssertionError, "stream is undefined"))
 	}
 
-	// 3.
+	// 3. Return ! ReadableStreamCancel(stream, reason).
 	return stream.cancel(reason)
 }
 

@@ -36,6 +36,18 @@ func TestBadUnderlyingSources(t *testing.T) {
 	assert.NoError(t, gotErr)
 }
 
+func TestCancel(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "cancel.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
+
 func TestConstructor(t *testing.T) {
 	t.Parallel()
 

@@ -109,13 +109,18 @@ func (reader *ReadableStreamDefaultReader) Closed() *goja.Promise {
 // supplied reason argument will be given to the underlying source, which may or
 // may not use it.
 //
-// The `reason` argument is optional, and should hold A human-readable reason for
+// The `reason` argument is optional, and should hold a human-readable reason for
 // the cancellation. This value may or may not be used.
-// FIXME: implement according to specification.
-func (reader *ReadableStreamDefaultReader) Cancel(_ goja.Value) *goja.Promise {
-	// Implement logic to return a promise that fulfills or rejects based on the reader's state
-	// The promise should fulfill when the reader is closed and reject if the reader is errored
-	return nil
+//
+// [SetUpReadableStreamDefaultReader]: https://streams.spec.whatwg.org/#set-up-readable-stream-default-reader
+func (reader *ReadableStreamDefaultReader) Cancel(reason goja.Value) *goja.Promise {
+	// 1. If this.[[stream]] is undefined, return a promise rejected with a TypeError exception.
+	if reader.stream == nil {
+		// FIXME: We don't have a VU?
+	}
+
+	// 2. Return ! ReadableStreamReaderGenericCancel(this, reason).
+	return reader.BaseReadableStreamReader.Cancel(reason)
 }
 
 // ReadResult is the result of a read operation
