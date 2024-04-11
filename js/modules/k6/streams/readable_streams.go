@@ -2,7 +2,6 @@ package streams
 
 import (
 	"errors"
-
 	"github.com/dop251/goja"
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
@@ -169,8 +168,8 @@ func (stream *ReadableStream) setupReadableByteStreamControllerFromUnderlyingSou
 	}
 
 	// 4. Let cancelAlgorithm be an algorithm that returns a promise resolved with undefined.
-	var cancelAlgorithm UnderlyingSourceCancelCallback = func(any) *goja.Promise {
-		return newResolvedPromise(stream.vu, goja.Undefined())
+	var cancelAlgorithm UnderlyingSourceCancelCallback = func(any) goja.Value {
+		return stream.vu.Runtime().ToValue(newResolvedPromise(stream.vu, goja.Undefined()))
 	}
 
 	// 5. If underlyingSourceDict["start"] exists, then set startAlgorithm to an algorithm
@@ -204,7 +203,7 @@ func (stream *ReadableStream) setupReadableByteStreamControllerFromUnderlyingSou
 	// which takes an argument reason and returns the result of invoking underlyingSourceDict["cancel"]
 	// with argument list « reason » and callback this value underlyingSource.
 	if underlyingSourceDict.cancelSet {
-		cancelAlgorithm = func(reason any) *goja.Promise {
+		cancelAlgorithm = func(reason any) goja.Value {
 			return underlyingSourceDict.Cancel(reason)
 		}
 	}
@@ -245,8 +244,8 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 	}
 
 	// 4. Let cancelAlgorithm be an algorithm that returns a promise resolved with undefined.
-	var cancelAlgorithm UnderlyingSourceCancelCallback = func(any) *goja.Promise {
-		return newResolvedPromise(stream.vu, goja.Undefined())
+	var cancelAlgorithm UnderlyingSourceCancelCallback = func(any) goja.Value {
+		return stream.vu.Runtime().ToValue(newResolvedPromise(stream.vu, goja.Undefined()))
 	}
 
 	// 5. If underlyingSourceDict["start"] exists, then set startAlgorithm to an algorithm
@@ -292,9 +291,14 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 	// reason and returns the result of invoking underlyingSourceDict["cancel"] with argument list « reason » and
 	// callback this value underlyingSource.
 	if underlyingSourceDict.cancelSet {
-		cancelAlgorithm = func(reason any) (p *goja.Promise) {
+		cancelAlgorithm = func(reason any) goja.Value {
+			var p *goja.Promise
+
 			if e := stream.runtime.Try(func() {
-				p = underlyingSourceDict.Cancel(reason)
+				res := underlyingSourceDict.Cancel(reason)
+				if cp, ok := res.Export().(*goja.Promise); ok {
+					p = cp
+				}
 			}); e != nil {
 				p = newRejectedPromise(stream.vu, e.Value())
 			}
@@ -302,7 +306,8 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 			if p == nil {
 				p = newResolvedPromise(stream.vu, goja.Undefined())
 			}
-			return p
+
+			return stream.vu.Runtime().ToValue(p)
 		}
 	}
 
@@ -616,16 +621,16 @@ func (stream *ReadableStream) cancel(reason goja.Value) *goja.Promise {
 	sourceCancelPromise := stream.controller.cancelSteps(reason)
 
 	// 8. Return the result of reacting to sourceCancelPromise with a fulfillment step that returns undefined.
-	_, err := promiseThen(stream.vu.Runtime(), sourceCancelPromise,
+	promise, err := promiseThen(stream.vu.Runtime(), sourceCancelPromise,
 		// Mimicking Deno's implementation: https://github.com/denoland/deno/blob/main/ext/web/06_streams.js#L405
 		func(goja.Value) {},
-		func(err goja.Value) {},
+		func(err goja.Value) { throw(stream.vu.Runtime(), err) },
 	)
 	if err != nil {
 		common.Throw(stream.vu.Runtime(), err)
 	}
 
-	return sourceCancelPromise
+	return promise
 }
 
 // close implements the specification's [ReadableStreamClose()] abstract operation.

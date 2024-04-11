@@ -72,7 +72,7 @@ type UnderlyingSourcePullCallback func(controller *goja.Object) *goja.Promise
 
 // UnderlyingSourceCancelCallback is a function that is called when the stream's or reader's `cancel()` method is
 // called.
-type UnderlyingSourceCancelCallback func(reason any) *goja.Promise
+type UnderlyingSourceCancelCallback func(reason any) goja.Value
 
 // NewUnderlyingSourceFromObject creates a new UnderlyingSource from a goja.Object.
 func NewUnderlyingSourceFromObject(rt *goja.Runtime, obj *goja.Object) (UnderlyingSource, error) {

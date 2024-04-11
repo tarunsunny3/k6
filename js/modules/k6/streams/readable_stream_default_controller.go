@@ -143,17 +143,21 @@ func (controller *ReadableStreamDefaultController) Error(err goja.Value) {
 //
 // [specification]: https://streams.spec.whatwg.org/#readable-stream-default-controller-cancel-steps
 func (controller *ReadableStreamDefaultController) cancelSteps(reason any) *goja.Promise {
-	// 1.
+	// 1. Perform ! ResetQueue(this).
 	controller.resetQueue()
 
-	// 2.
+	// 2. Let result be the result of performing this.[[cancelAlgorithm]], passing reason.
 	result := controller.cancelAlgorithm(reason)
 
-	// 3.
+	// 3. Perform ! ReadableStreamDefaultControllerClearAlgorithms(this).
 	controller.clearAlgorithms()
 
-	// 4.
-	return result
+	// 4. Return result.
+	if p, ok := result.Export().(*goja.Promise); ok {
+		return p
+	}
+
+	return newRejectedPromise(controller.stream.vu, newError(RuntimeError, "cancel algorithm error"))
 }
 
 // pullSteps performs the controller’s steps that run when a default reader
