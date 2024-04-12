@@ -82,11 +82,7 @@ func (reader *ReadableStreamDefaultReader) Read() *goja.Promise {
 	}
 
 	// 4. Perform ! ReadableStreamDefaultReaderRead(this, readRequest).
-	enqueueCallback := reader.stream.vu.RegisterCallback()
-	enqueueCallback(func() error {
-		reader.read(readRequest)
-		return nil
-	})
+	reader.read(readRequest)
 
 	// 5. Return promise.
 	return promise
@@ -138,8 +134,27 @@ type ReadResult struct {
 // reader will appear errored in that same way subsequently; otherwise, the
 // reader will appear closed.
 func (reader *ReadableStreamDefaultReader) ReleaseLock() {
-	// Implement the logic to release the lock on the stream
-	// This might involve changing the state of the stream and handling any queued read requests
+	// 1. If this.[[stream]] is undefined, return.
+	if reader.stream == nil {
+		return
+	}
+
+	// 2. Perform ! ReadableStreamDefaultReaderRelease(this).
+	reader.release()
+}
+
+// release implements the [ReadableStreamDefaultReaderRelease] algorithm.
+//
+// [ReadableStreamDefaultReaderRelease]: https://streams.spec.whatwg.org/#abstract-opdef-readablestreamdefaultreaderrelease
+func (reader *ReadableStreamDefaultReader) release() {
+	// 1. Perform ! ReadableStreamReaderGenericRelease(reader).
+	reader.BaseReadableStreamReader.release()
+
+	// 2. Let e be a new TypeError exception.
+	e := newError(TypeError, "reader released")
+
+	// 3. Perform ! ReadableStreamDefaultReaderErrorReadRequests(reader, e).
+	reader.errorReadRequests(e)
 }
 
 // setup implements the [SetUpReadableStreamDefaultReader] algorithm.
@@ -148,7 +163,7 @@ func (reader *ReadableStreamDefaultReader) ReleaseLock() {
 func (reader *ReadableStreamDefaultReader) setup(stream *ReadableStream) {
 	// 1. If ! IsReadableStreamLocked(stream) is true, throw a TypeError exception.
 	if stream.isLocked() {
-		common.Throw(reader.GetStream().vu.Runtime(), newError(TypeError, "stream is locked"))
+		throw(stream.vu.Runtime(), newError(TypeError, "stream is locked"))
 	}
 
 	// 2. Perform ! ReadableStreamReaderGenericInitialize(reader, stream).
@@ -205,6 +220,10 @@ func (reader *ReadableStreamDefaultReader) read(readRequest ReadRequest) {
 		}
 
 		// 6.2. Perform ! stream.[[controller]].[[PullSteps]](readRequest).
-		stream.controller.pullSteps(readRequest)
+		enqueueCallback := reader.stream.vu.RegisterCallback()
+		enqueueCallback(func() error {
+			stream.controller.pullSteps(readRequest)
+			return nil
+		})
 	}
 }

@@ -563,18 +563,18 @@ func (stream *ReadableStream) acquireBYOBReader() *ReadableStreamBYOBReader {
 //
 // [ReadableStreamAddReadRequest()]: https://streams.spec.whatwg.org/#readable-stream-add-read-request
 func (stream *ReadableStream) addReadRequest(readRequest ReadRequest) {
-	// 1.
+	// 1. Assert: stream.[[reader]] implements ReadableStreamDefaultReader.
 	defaultReader, ok := stream.reader.(*ReadableStreamDefaultReader)
 	if !ok {
 		common.Throw(stream.vu.Runtime(), newError(AssertionError, "reader is not a ReadableStreamDefaultReader"))
 	}
 
-	// 2.
+	// 2. Assert: stream.[[state]] is "readable".
 	if stream.state != ReadableStreamStateReadable {
 		common.Throw(stream.vu.Runtime(), newError(AssertionError, "stream is not readable"))
 	}
 
-	// 3.
+	// 3. Append readRequest to stream.[[reader]].[[readRequests]].
 	defaultReader.readRequests = append(defaultReader.readRequests, readRequest)
 }
 

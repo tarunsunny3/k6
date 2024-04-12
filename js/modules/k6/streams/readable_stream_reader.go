@@ -3,6 +3,7 @@ package streams
 import (
 	"github.com/dop251/goja"
 	"go.k6.io/k6/js/common"
+	"go.k6.io/k6/js/modules"
 )
 
 // ReadableStreamReader is the interface implemented by all readable stream readers.
@@ -51,6 +52,9 @@ type BaseReadableStreamReader struct {
 
 	// stream is a [ReadableStream] instance that owns this reader
 	stream *ReadableStream
+
+	runtime *goja.Runtime
+	vu      modules.VU
 }
 
 // Ensure BaseReadableStreamReader implements the ReadableStreamGenericReader interface correctly
@@ -64,6 +68,8 @@ func (reader *BaseReadableStreamReader) GetStream() *ReadableStream {
 // SetStream sets the stream that owns this reader.
 func (reader *BaseReadableStreamReader) SetStream(stream *ReadableStream) {
 	reader.stream = stream
+	reader.runtime = stream.runtime
+	reader.vu = stream.vu
 }
 
 // GetClosed returns the reader's closed promise as well as its resolve and reject functions.
@@ -92,11 +98,58 @@ func (reader *BaseReadableStreamReader) cancel(reason goja.Value) *goja.Promise 
 
 	// 2. Assert: stream is not undefined.
 	if stream == nil {
-		common.Throw(reader.stream.vu.Runtime(), newError(AssertionError, "stream is undefined"))
+		return newRejectedPromise(reader.vu, newError(TypeError, "stream is undefined"))
 	}
 
 	// 3. Return ! ReadableStreamCancel(stream, reason).
 	return stream.cancel(reason)
+}
+
+// release implements the [ReadableStreamReaderGenericRelease(reader)] [specification] algorithm.
+//
+// [specification]: https://streams.spec.whatwg.org/#readable-stream-reader-generic-release
+func (reader *BaseReadableStreamReader) release() {
+	// 1. Let stream be reader.[[stream]].
+	stream := reader.stream
+
+	// 2. Assert: stream is not undefined.
+	if stream == nil {
+		common.Throw(reader.stream.vu.Runtime(), newError(AssertionError, "stream is undefined"))
+	}
+
+	// 3. Assert: stream.[[reader]] is reader.
+	if stream.reader == nil {
+		common.Throw(reader.stream.vu.Runtime(), newError(AssertionError, "stream is undefined"))
+	}
+
+	var streamReader *BaseReadableStreamReader
+	switch v := stream.reader.(type) {
+	case *ReadableStreamDefaultReader:
+		streamReader = &v.BaseReadableStreamReader
+	case *ReadableStreamBYOBReader:
+	}
+
+	if reader != streamReader {
+		common.Throw(reader.stream.vu.Runtime(), newError(AssertionError, "stream reader isn't reader"))
+	}
+
+	// 4. If stream.[[state]] is "readable", reject reader.[[closedPromise]] with a TypeError exception.
+	if stream.state == ReadableStreamStateReadable {
+		//reader.closedPromiseRejectFunc(newError(TypeError, "stream is readable"))
+	} else { // 5. Otherwise, set reader.[[closedPromise]] to a promise rejected with a TypeError exception.
+		reader.closedPromise = newRejectedPromise(stream.vu, newError(TypeError, "stream is not readable"))
+	}
+
+	// 6. Set reader.[[closedPromise]].[[PromiseIsHandled]] to true. Implicit?
+
+	// 7. Perform ! stream.[[controller]].[[ReleaseSteps]]().
+	stream.controller.releaseSteps()
+
+	// 8. Set stream.[[reader]] to undefined.
+	stream.reader = nil
+
+	// 9. Set reader.[[stream]] to undefined.
+	reader.stream = nil
 }
 
 // ReadRequest is a struct containing three algorithms to perform in reaction to filling the readable stream's

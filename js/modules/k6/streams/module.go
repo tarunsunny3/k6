@@ -46,8 +46,9 @@ func (rm *RootModule) NewModuleInstance(vu modules.VU) modules.Instance {
 // Exports returns the module exports, that will be available in the runtime.
 func (mi *ModuleInstance) Exports() modules.Exports {
 	return modules.Exports{Named: map[string]interface{}{
-		"ReadableStream":       mi.NewReadableStream,
-		"CountQueuingStrategy": mi.NewCountQueuingStrategy,
+		"ReadableStream":              mi.NewReadableStream,
+		"CountQueuingStrategy":        mi.NewCountQueuingStrategy,
+		"ReadableStreamDefaultReader": mi.NewReadableStreamDefaultReader,
 	}}
 }
 
@@ -243,4 +244,26 @@ func extractSizeAlgorithm(rt *goja.Runtime, strategy *goja.Object) SizeAlgorithm
 	}
 
 	return sizeFunc
+}
+
+// NewReadableStreamDefaultReader is the constructor for the [ReadableStreamDefaultReader] object.
+//
+// [ReadableStreamDefaultReader]: https://streams.spec.whatwg.org/#readablestreamdefaultreader
+func (mi *ModuleInstance) NewReadableStreamDefaultReader(call goja.ConstructorCall) *goja.Object {
+	rt := mi.vu.Runtime()
+
+	if len(call.Arguments) != 1 {
+		throw(rt, newError(TypeError, "ReadableStreamDefaultReader takes a single argument"))
+	}
+
+	stream, ok := call.Argument(0).Export().(*ReadableStream)
+	if !ok {
+		throw(rt, newError(TypeError, "ReadableStreamDefaultReader argument must be a ReadableStream"))
+	}
+
+	// 1. Perform ? SetUpReadableStreamDefaultReader(this, stream).
+	reader := &ReadableStreamDefaultReader{}
+	reader.setup(stream)
+
+	return rt.ToValue(reader).ToObject(rt)
 }

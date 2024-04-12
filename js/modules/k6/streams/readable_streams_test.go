@@ -72,6 +72,18 @@ func TestCountQueuingStrategyIntegration(t *testing.T) {
 	assert.NoError(t, gotErr)
 }
 
+func TestDefaultReader(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "default-reader.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
+
 func TestFloatingPointTotalQueueSize(t *testing.T) {
 	t.Parallel()
 
@@ -139,6 +151,7 @@ func newConfiguredRuntime(t testing.TB) *modulestest.Runtime {
 	// TODO: Can we do this more generic, perhaps even part of the NewRuntimeForWPT signature?
 	err = runtime.VU.Runtime().Set("ReadableStream", m.Exports().Named["ReadableStream"])
 	err = runtime.VU.Runtime().Set("CountQueuingStrategy", m.Exports().Named["CountQueuingStrategy"])
+	err = runtime.VU.Runtime().Set("ReadableStreamDefaultReader", m.Exports().Named["ReadableStreamDefaultReader"])
 	require.NoError(t, err)
 
 	return runtime

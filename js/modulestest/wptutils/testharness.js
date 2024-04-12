@@ -414,6 +414,25 @@ function promise_rejects_exactly(test, exception, promise, description) {
 }
 
 /**
+ * Assert that a Promise is rejected with the right ECMAScript exception.
+ *
+ * @param {Test} test - the `Test` to use for the assertion.
+ * @param {Function} constructor - The expected exception constructor.
+ * @param {Promise} promise - The promise that's expected to
+ * reject with the given exception.
+ * @param {string} [description] Error message to add to assert in case of
+ *                               failure.
+ */
+function promise_rejects_js(test, constructor, promise, description) {
+	return bring_promise_to_current_realm(promise)
+		.then(() => {assert_unreached("Should have rejected: " + description)})
+		.catch(function(e) {
+			assert_throws_js_impl(constructor, function() { throw e },
+				description, "promise_rejects_js");
+		});
+}
+
+/**
  * Assert a JS Error with the expected constructor is thrown.
  *
  * @param {object} constructor The expected exception constructor.

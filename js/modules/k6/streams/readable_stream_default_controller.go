@@ -187,12 +187,17 @@ func (controller *ReadableStreamDefaultController) pullSteps(readRequest ReadReq
 			// 2.2.2. Perform ! ReadableStreamClose(stream).
 			stream.close()
 		} else {
+			// 2.3. Otherwise, perform ! ReadableStreamDefaultControllerCallPullIfNeeded(this).
 			controller.callPullIfNeeded()
 		}
 
+		// 2. 4. Perform readRequest’s chunk steps, given chunk.
 		readRequest.chunkSteps(chunk)
-	} else {
+	} else { // 3. Otherwise,
+		// 3.1. Perform ! ReadableStreamAddReadRequest(stream, readRequest).
 		stream.addReadRequest(readRequest)
+
+		// 3.2. Perform ! ReadableStreamDefaultControllerCallPullIfNeeded(this).
 		controller.callPullIfNeeded()
 	}
 }
