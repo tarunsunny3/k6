@@ -51,9 +51,15 @@ func throw(rt *goja.Runtime, err any) {
 	panic(errToObj(rt, err))
 }
 
-func errToObj(rt *goja.Runtime, err any) *goja.Object {
+func errToObj(rt *goja.Runtime, err any) goja.Value {
+	// Undefined remains undefined.
+	if goja.IsUndefined(rt.ToValue(err)) {
+		return rt.ToValue(err)
+	}
+
 	if e, ok := err.(*goja.Exception); ok { //nolint:errorlint // we don't really want to unwrap here
 		return e.Value().ToObject(rt)
 	}
+
 	return rt.ToValue(err).ToObject(rt)
 }

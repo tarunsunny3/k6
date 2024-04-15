@@ -137,7 +137,10 @@ func (reader *BaseReadableStreamReader) release() {
 	if stream.state == ReadableStreamStateReadable {
 		//reader.closedPromiseRejectFunc(newError(TypeError, "stream is readable"))
 	} else { // 5. Otherwise, set reader.[[closedPromise]] to a promise rejected with a TypeError exception.
-		reader.closedPromise = newRejectedPromise(stream.vu, newError(TypeError, "stream is not readable"))
+		// FIXME: Looks like this depends on https://github.com/dop251/goja/issues/565
+		// As it is now, it will throw an error because the promise is rejected.
+		// But, we do actually want it to be rejected silently.
+		//reader.closedPromise = newRejectedPromise(stream.vu, newError(TypeError, "stream is not readable"))
 	}
 
 	// 6. Set reader.[[closedPromise]].[[PromiseIsHandled]] to true. Implicit?

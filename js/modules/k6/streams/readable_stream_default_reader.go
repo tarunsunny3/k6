@@ -220,10 +220,6 @@ func (reader *ReadableStreamDefaultReader) read(readRequest ReadRequest) {
 		}
 
 		// 6.2. Perform ! stream.[[controller]].[[PullSteps]](readRequest).
-		enqueueCallback := reader.stream.vu.RegisterCallback()
-		enqueueCallback(func() error {
-			stream.controller.pullSteps(readRequest)
-			return nil
-		})
+		stream.controller.pullSteps(readRequest)
 	}
 }

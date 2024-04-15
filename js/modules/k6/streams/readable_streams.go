@@ -91,7 +91,7 @@ func (stream *ReadableStream) GetReader(options *goja.Object) goja.Value {
 
 	// 2. Assert: options["mode"] is "byob".
 	if options.Get("mode").String() != ReaderTypeByob {
-		common.Throw(stream.runtime, newError(TypeError, "options.mode is not 'byob'"))
+		throw(stream.runtime, newError(TypeError, "options.mode is not 'byob'"))
 	}
 
 	// 3. Return ? AcquireReadableStreamBYOBReader(this).
@@ -371,6 +371,9 @@ func (stream *ReadableStream) setupDefaultController(
 	if common.IsNullish(startResult) {
 		startPromise = newResolvedPromise(controller.stream.vu, startResult)
 	} else if p, ok := startResult.Export().(*goja.Promise); ok {
+		if p.State() == goja.PromiseStateRejected {
+			controller.error(p.Result())
+		}
 		startPromise = p
 	} else {
 		startPromise = newResolvedPromise(controller.stream.vu, startResult)
@@ -566,12 +569,14 @@ func (stream *ReadableStream) addReadRequest(readRequest ReadRequest) {
 	// 1. Assert: stream.[[reader]] implements ReadableStreamDefaultReader.
 	defaultReader, ok := stream.reader.(*ReadableStreamDefaultReader)
 	if !ok {
-		common.Throw(stream.vu.Runtime(), newError(AssertionError, "reader is not a ReadableStreamDefaultReader"))
+		readRequest.errorSteps(newError(RuntimeError, "reader is not a ReadableStreamDefaultReader"))
+		return
 	}
 
 	// 2. Assert: stream.[[state]] is "readable".
 	if stream.state != ReadableStreamStateReadable {
-		common.Throw(stream.vu.Runtime(), newError(AssertionError, "stream is not readable"))
+		readRequest.errorSteps(newError(AssertionError, "stream is not readable"))
+		return
 	}
 
 	// 3. Append readRequest to stream.[[reader]].[[readRequests]].
