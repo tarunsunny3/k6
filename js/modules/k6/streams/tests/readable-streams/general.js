@@ -2,81 +2,81 @@
 // META: global=window,worker,shadowrealm
 // META: script=../resources/test-utils.js
 // META: script=../resources/rs-utils.js
-// 'use strict';
-//
-// const error1 = new Error('error1');
-// error1.name = 'error1';
-//
-// test(() => {
-//
-// 	new ReadableStream(); // ReadableStream constructed with no parameters
-// 	new ReadableStream({}); // ReadableStream constructed with an empty object as parameter
-// 	new ReadableStream({type: undefined}); // ReadableStream constructed with undefined type
-// 	new ReadableStream(undefined); // ReadableStream constructed with undefined as parameter
-//
-// 	let x;
-// 	new ReadableStream(x); // ReadableStream constructed with an undefined variable as parameter
-//
-// }, 'ReadableStream can be constructed with no errors');
-//
-// test(() => {
-//
-// 	assert_throws_js(TypeError, () => new ReadableStream(null), 'constructor should throw when the source is null');
-//
-// }, 'ReadableStream can\'t be constructed with garbage');
-//
-// test(() => {
-//
-// 	assert_throws_js(TypeError, () => new ReadableStream({type: null}),
-// 		'constructor should throw when the type is null');
-// 	assert_throws_js(TypeError, () => new ReadableStream({type: ''}),
-// 		'constructor should throw when the type is empty string');
-// 	assert_throws_js(TypeError, () => new ReadableStream({type: 'asdf'}),
-// 		'constructor should throw when the type is asdf');
-// 	assert_throws_exactly(
-// 		error1,
-// 		() => new ReadableStream({
-// 			type: {
-// 				get toString() {
-// 					throw error1;
-// 				}
-// 			}
-// 		}),
-// 		'constructor should throw when ToString() throws'
-// 	);
-// 	assert_throws_exactly(
-// 		error1,
-// 		() => new ReadableStream({
-// 			type: {
-// 				toString() {
-// 					throw error1;
-// 				}
-// 			}
-// 		}),
-// 		'constructor should throw when ToString() throws'
-// 	);
-//
-// }, 'ReadableStream can\'t be constructed with an invalid type');
-//
-// test(() => {
-//
-// 	assert_throws_js(TypeError, () => {
-// 		new ReadableStream({start: 'potato'});
-// 	}, 'constructor should throw when start is not a function');
-//
-// }, 'ReadableStream constructor should throw for non-function start arguments');
-//
-// test(() => {
-//
-// 	assert_throws_js(TypeError, () => new ReadableStream({cancel: '2'}), 'constructor should throw');
-//
-// }, 'ReadableStream constructor will not tolerate initial garbage as cancel argument');
-//
-// test(() => {
-//
-// 	assert_throws_js(TypeError, () => new ReadableStream({pull: {}}), 'constructor should throw');
-//
-// }, 'ReadableStream constructor will not tolerate initial garbage as pull argument');
+'use strict';
+
+const error1 = new Error('error1');
+error1.name = 'error1';
+
+test(() => {
+
+	new ReadableStream(); // ReadableStream constructed with no parameters
+	new ReadableStream({}); // ReadableStream constructed with an empty object as parameter
+	new ReadableStream({type: undefined}); // ReadableStream constructed with undefined type
+	new ReadableStream(undefined); // ReadableStream constructed with undefined as parameter
+
+	let x;
+	new ReadableStream(x); // ReadableStream constructed with an undefined variable as parameter
+
+}, 'ReadableStream can be constructed with no errors');
+
+test(() => {
+
+	assert_throws_js(TypeError, () => new ReadableStream(null), 'constructor should throw when the source is null');
+
+}, 'ReadableStream can\'t be constructed with garbage');
+
+test(() => {
+
+	assert_throws_js(TypeError, () => new ReadableStream({type: null}),
+		'constructor should throw when the type is null');
+	assert_throws_js(TypeError, () => new ReadableStream({type: ''}),
+		'constructor should throw when the type is empty string');
+	assert_throws_js(TypeError, () => new ReadableStream({type: 'asdf'}),
+		'constructor should throw when the type is asdf');
+	assert_throws_exactly(
+		error1,
+		() => new ReadableStream({
+			type: {
+				get toString() {
+					throw error1;
+				}
+			}
+		}),
+		'constructor should throw when ToString() throws'
+	);
+	assert_throws_exactly(
+		error1,
+		() => new ReadableStream({
+			type: {
+				toString() {
+					throw error1;
+				}
+			}
+		}),
+		'constructor should throw when ToString() throws'
+	);
+
+}, 'ReadableStream can\'t be constructed with an invalid type');
+
+test(() => {
+
+	assert_throws_js(TypeError, () => {
+		new ReadableStream({start: 'potato'});
+	}, 'constructor should throw when start is not a function');
+
+}, 'ReadableStream constructor should throw for non-function start arguments');
+
+test(() => {
+
+	assert_throws_js(TypeError, () => new ReadableStream({cancel: '2'}), 'constructor should throw');
+
+}, 'ReadableStream constructor will not tolerate initial garbage as cancel argument');
+
+test(() => {
+
+	assert_throws_js(TypeError, () => new ReadableStream({pull: {}}), 'constructor should throw');
+
+}, 'ReadableStream constructor will not tolerate initial garbage as pull argument');
 
 // FIXME @joanlopez: make this pass.
 // Can we revisit the manipulation of this?
@@ -123,147 +123,145 @@
 //
 // }, 'ReadableStream start controller parameter should be extensible');
 
-// test(() => {
-// 	(new ReadableStream()).getReader(undefined);
-// 	(new ReadableStream()).getReader({});
-// 	(new ReadableStream()).getReader({ mode: undefined, notmode: 'ignored' });
-// 	assert_throws_js(TypeError, () => (new ReadableStream()).getReader({ mode: 'potato' }));
-// }, 'default ReadableStream getReader() should only accept mode:undefined');
+test(() => {
+	(new ReadableStream()).getReader(undefined);
+	(new ReadableStream()).getReader({});
+	(new ReadableStream()).getReader({ mode: undefined, notmode: 'ignored' });
+	assert_throws_js(TypeError, () => (new ReadableStream()).getReader({ mode: 'potato' }));
+}, 'default ReadableStream getReader() should only accept mode:undefined');
 
-// promise_test(() => {
-//
-// 	function SimpleStreamSource() {
-// 	}
-//
-// 	let resolve;
-// 	const promise = new Promise(r => resolve = r);
-// 	SimpleStreamSource.prototype = {
-// 		start: resolve
-// 	};
-//
-// 	new ReadableStream(new SimpleStreamSource());
-// 	return promise;
-//
-// }, 'ReadableStream should be able to call start method within prototype chain of its source');
-//
-// promise_test(() => {
-//
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			return delay(5).then(() => {
-// 				c.enqueue('a');
-// 				c.close();
-// 			});
-// 		}
-// 	});
-//
-// 	const reader = rs.getReader();
-// 	return reader.read().then(r => {
-// 		assert_object_equals(r, {value: 'a', done: false}, 'value read should be the one enqueued');
-// 		return reader.closed;
-// 	});
-//
-// }, 'ReadableStream start should be able to return a promise');
-//
-// promise_test(() => {
-//
-// 	const theError = new Error('rejected!');
-// 	const rs = new ReadableStream({
-// 		start() {
-// 			return delay(1).then(() => {
-// 				throw theError;
-// 			});
-// 		}
-// 	});
-//
-// 	return rs.getReader().closed.then(() => {
-// 		assert_unreached('closed promise should be rejected');
-// 	}, e => {
-// 		assert_equals(e, theError, 'promise should be rejected with the same error');
-// 	});
-//
-// }, 'ReadableStream start should be able to return a promise and reject it');
-//
-// promise_test(() => {
-//
-// 	const objects = [
-// 		{potato: 'Give me more!'},
-// 		'test',
-// 		1
-// 	];
-//
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			for (const o of objects) {
-// 				c.enqueue(o);
-// 			}
-// 			c.close();
-// 		}
-// 	});
-//
-// 	const reader = rs.getReader();
-//
-// 	return Promise.all([reader.read(), reader.read(), reader.read(), reader.closed]).then(r => {
-// 		console.log(`Objects at this point contain ${JSON.stringify(objects)}`);
-// 		console.log(`Result at this point contain ${JSON.stringify(r)}`);
-// 		assert_object_equals(r[0], {value: objects[0], done: false}, 'value read should be the one enqueued');
-// 		assert_object_equals(r[1], {value: objects[1], done: false}, 'value read should be the one enqueued');
-// 		assert_object_equals(r[2], {value: objects[2], done: false}, 'value read should be the one enqueued');
-// 	});
-//
-// }, 'ReadableStream should be able to enqueue different objects.');
+promise_test(() => {
 
-// promise_test(() => {
-//
-// 	const error = new Error('pull failure');
-// 	const rs = new ReadableStream({
-// 		pull() {
-// 			return Promise.reject(error);
-// 		}
-// 	});
-//
-// 	const reader = rs.getReader();
-//
-// 	let closed = false;
-// 	let read = false;
-//
-// 	return Promise.all([
-// 		reader.closed.then(() => {
-// 			assert_unreached('closed should be rejected');
-// 		}, e => {
-// 			closed = true;
-// 			assert_false(read);
-// 			assert_equals(e, error, 'closed should be rejected with the thrown error');
-// 		}),
-// 		reader.read().then(() => {
-// 			assert_unreached('read() should be rejected');
-// 		}, e => {
-// 			read = true;
-// 			assert_true(closed);
-// 			assert_equals(e, error, 'read() should be rejected with the thrown error');
-// 		})
-// 	]);
-//
-// }, 'ReadableStream: if pull rejects, it should error the stream');
+	function SimpleStreamSource() {
+	}
 
-// promise_test(() => {
-//
-// 	let pullCount = 0;
-//
-// 	new ReadableStream({
-// 		pull() {
-// 			pullCount++;
-// 		}
-// 	});
-//
-// 	return flushAsyncEvents().then(() => {
-// 		assert_equals(pullCount, 1, 'pull should be called once start finishes');
-// 		return delay(10);
-// 	}).then(() => {
-// 		assert_equals(pullCount, 1, 'pull should be called exactly once');
-// 	});
-//
-// }, 'ReadableStream: should only call pull once upon starting the stream');
+	let resolve;
+	const promise = new Promise(r => resolve = r);
+	SimpleStreamSource.prototype = {
+		start: resolve
+	};
+
+	new ReadableStream(new SimpleStreamSource());
+	return promise;
+
+}, 'ReadableStream should be able to call start method within prototype chain of its source');
+
+promise_test(() => {
+
+	const rs = new ReadableStream({
+		start(c) {
+			return delay(5).then(() => {
+				c.enqueue('a');
+				c.close();
+			});
+		}
+	});
+
+	const reader = rs.getReader();
+	return reader.read().then(r => {
+		assert_object_equals(r, {value: 'a', done: false}, 'value read should be the one enqueued');
+		return reader.closed;
+	});
+
+}, 'ReadableStream start should be able to return a promise');
+
+promise_test(() => {
+
+	const theError = new Error('rejected!');
+	const rs = new ReadableStream({
+		start() {
+			return delay(1).then(() => {
+				throw theError;
+			});
+		}
+	});
+
+	return rs.getReader().closed.then(() => {
+		assert_unreached('closed promise should be rejected');
+	}, e => {
+		assert_equals(e, theError, 'promise should be rejected with the same error');
+	});
+
+}, 'ReadableStream start should be able to return a promise and reject it');
+
+promise_test(() => {
+
+	const objects = [
+		{potato: 'Give me more!'},
+		'test',
+		1
+	];
+
+	const rs = new ReadableStream({
+		start(c) {
+			for (const o of objects) {
+				c.enqueue(o);
+			}
+			c.close();
+		}
+	});
+
+	const reader = rs.getReader();
+
+	return Promise.all([reader.read(), reader.read(), reader.read(), reader.closed]).then(r => {
+		assert_object_equals(r[0], {value: objects[0], done: false}, 'value read should be the one enqueued');
+		assert_object_equals(r[1], {value: objects[1], done: false}, 'value read should be the one enqueued');
+		assert_object_equals(r[2], {value: objects[2], done: false}, 'value read should be the one enqueued');
+	});
+
+}, 'ReadableStream should be able to enqueue different objects.');
+
+promise_test(() => {
+
+	const error = new Error('pull failure');
+	const rs = new ReadableStream({
+		pull() {
+			return Promise.reject(error);
+		}
+	});
+
+	const reader = rs.getReader();
+
+	let closed = false;
+	let read = false;
+
+	return Promise.all([
+		reader.closed.then(() => {
+			assert_unreached('closed should be rejected');
+		}, e => {
+			closed = true;
+			assert_false(read);
+			assert_equals(e, error, 'closed should be rejected with the thrown error');
+		}),
+		reader.read().then(() => {
+			assert_unreached('read() should be rejected');
+		}, e => {
+			read = true;
+			assert_true(closed);
+			assert_equals(e, error, 'read() should be rejected with the thrown error');
+		})
+	]);
+
+}, 'ReadableStream: if pull rejects, it should error the stream');
+
+promise_test(() => {
+
+	let pullCount = 0;
+
+	new ReadableStream({
+		pull() {
+			pullCount++;
+		}
+	});
+
+	return flushAsyncEvents().then(() => {
+		assert_equals(pullCount, 1, 'pull should be called once start finishes');
+		return delay(10);
+	}).then(() => {
+		assert_equals(pullCount, 1, 'pull should be called exactly once');
+	});
+
+}, 'ReadableStream: should only call pull once upon starting the stream');
 
 // promise_test(() => {
 //
@@ -532,76 +530,73 @@ promise_test(() => {
 
 }, 'ReadableStream: should not call pull after start if the stream is now closed');
 
-// FIXME: This test hangs forever! It seems that the promise never resolves.
-// promise_test(() => {
-//
-// 	let timesCalled = 0;
-// 	let resolve;
-// 	const ready = new Promise(r => resolve = r);
-//
-// 	new ReadableStream(
-// 		{
-// 			start() {},
-// 			pull(c) {
-// 				c.enqueue(++timesCalled);
-//
-// 				if (timesCalled === 4) {
-// 					resolve();
-// 				}
-// 			}
-// 		},
-// 		{
-// 			size() {
-// 				return 1;
-// 			},
-// 			highWaterMark: 4
-// 		}
-// 	);
-//
-// 	return ready.then(() => {
-// 		// after start: size = 0, pull()
-// 		// after enqueue(1): size = 1, pull()
-// 		// after enqueue(2): size = 2, pull()
-// 		// after enqueue(3): size = 3, pull()
-// 		// after enqueue(4): size = 4, do not pull
-// 		assert_equals(timesCalled, 4, 'pull() should have been called four times');
-// 	});
-//
-// }, 'ReadableStream: should call pull after enqueueing from inside pull (with no read requests), if strategy allows');
+promise_test(() => {
 
-// FIXME: This test hangs forever! It seems that the promise never resolves.
-// promise_test(() => {
-//
-// 	let pullCalled = false;
-//
-// 	const rs = new ReadableStream({
-// 		pull(c) {
-// 			pullCalled = true;
-// 			c.close();
-// 		}
-// 	});
-//
-// 	const reader = rs.getReader();
-// 	return reader.closed.then(() => {
-// 		assert_true(pullCalled);
-// 	});
-//
-// }, 'ReadableStream pull should be able to close a stream.');
+	let timesCalled = 0;
+	let resolve;
+	const ready = new Promise(r => resolve = r);
 
-// FIXME: This test hangs forever! It seems that the promise never resolves.
-// promise_test(t => {
-//
-// 	const controllerError = { name: 'controller error' };
-//
-// 	const rs = new ReadableStream({
-// 		pull(c) {
-// 			c.error(controllerError);
-// 		}
-// 	});
-//
-// 	return promise_rejects_exactly(t, controllerError, rs.getReader().closed);
-//
-// }, 'ReadableStream pull should be able to error a stream.');
+	new ReadableStream(
+		{
+			start() {},
+			pull(c) {
+				c.enqueue(++timesCalled);
+
+				if (timesCalled === 4) {
+					resolve();
+				}
+			}
+		},
+		{
+			size() {
+				return 1;
+			},
+			highWaterMark: 4
+		}
+	);
+
+	return ready.then(() => {
+		// after start: size = 0, pull()
+		// after enqueue(1): size = 1, pull()
+		// after enqueue(2): size = 2, pull()
+		// after enqueue(3): size = 3, pull()
+		// after enqueue(4): size = 4, do not pull
+		assert_equals(timesCalled, 4, 'pull() should have been called four times');
+	});
+
+}, 'ReadableStream: should call pull after enqueueing from inside pull (with no read requests), if strategy allows');
+
+promise_test(() => {
+
+	let pullCalled = false;
+
+	const rs = new ReadableStream({
+		pull(c) {
+			pullCalled = true;
+			c.close();
+		}
+	});
+
+	const reader = rs.getReader();
+	return reader.closed.then(() => {
+		assert_true(pullCalled);
+	});
+
+}, 'ReadableStream pull should be able to close a stream.');
+
+promise_test(t => {
+
+	const controllerError = { name: 'controller error' };
+
+	const rs = new ReadableStream({
+		pull(c) {
+			c.error(controllerError);
+		}
+	});
+
+	return promise_rejects_exactly(t, controllerError, rs.getReader().closed);
+
+}, 'ReadableStream pull should be able to error a stream.');
 
 promise_test(t => {
 

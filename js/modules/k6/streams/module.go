@@ -74,14 +74,14 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	if len(call.Arguments) > 0 && !goja.IsUndefined(call.Arguments[0]) {
 		// We first assert that it is an object (requirement)
 		if !isObject(call.Arguments[0]) {
-			common.Throw(runtime, newError(TypeError, "underlyingSource must be an object"))
+			throw(runtime, newError(TypeError, "underlyingSource must be an object"))
 		}
 
 		// Then we try to convert it to an UnderlyingSource
 		underlyingSource = call.Arguments[0].ToObject(runtime)
 		underlyingSourceDict, err = NewUnderlyingSourceFromObject(runtime, underlyingSource)
 		if err != nil {
-			common.Throw(runtime, err)
+			throw(runtime, err)
 		}
 	}
 
