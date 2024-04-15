@@ -53,7 +53,7 @@ func (reader *ReadableStreamDefaultReader) Read() *goja.Promise {
 
 	// 1. If this.[[stream]] is undefined, return a promise rejected with a TypeError exception.
 	if stream == nil {
-		return newRejectedPromise(stream.vu, newError(TypeError, "stream is undefined"))
+		return newRejectedPromise(reader.vu, newError(TypeError, "stream is undefined"))
 	}
 
 	// 2. Let promise be a new promise.

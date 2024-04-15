@@ -79,7 +79,7 @@ func (stream *ReadableStream) Cancel(reason goja.Value) *goja.Promise {
 // [getReader]: https://streams.spec.whatwg.org/#rs-get-reader
 func (stream *ReadableStream) GetReader(options *goja.Object) goja.Value {
 	// 1. If options["mode"] does not exist, return ? AcquireReadableStreamDefaultReader(this).
-	if options == nil || common.IsNullish(options) || common.IsNullish(options.Get("mode")) {
+	if options == nil || common.IsNullish(options) || options.Get("mode") == nil || goja.IsUndefined(options.Get("mode")) {
 		defaultReader := stream.acquireDefaultReader()
 		defaultReaderObj, err := NewReadableStreamDefaultReaderObject(defaultReader)
 		if err != nil {

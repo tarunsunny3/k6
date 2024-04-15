@@ -11,12 +11,12 @@ test(() => {
 
 }, 'ReadableStreamDefaultReader constructor should get a ReadableStream object as argument');
 
-// test(() => {
-//
-// 	const rsReader = new ReadableStreamDefaultReader(new ReadableStream());
-// 	assert_equals(rsReader.closed, rsReader.closed, 'closed should return the same promise');
-//
-// }, 'ReadableStreamDefaultReader closed should always return the same promise object');
+test(() => {
+
+	const rsReader = new ReadableStreamDefaultReader(new ReadableStream());
+	assert_equals(rsReader.closed, rsReader.closed, 'closed should return the same promise');
+
+}, 'ReadableStreamDefaultReader closed should always return the same promise object');
 
 test(() => {
 
@@ -89,7 +89,7 @@ promise_test(() => {
 	const reader = rs.getReader();
 
 	const promise = reader.read().then(result => {
-		assert_object_equals(result, { value: 'a', done: false }, 'read() should fulfill with the enqueued chunk');
+		assert_object_equals(result, {value: 'a', done: false}, 'read() should fulfill with the enqueued chunk');
 	});
 
 	controller.enqueue('a');
@@ -155,56 +155,60 @@ promise_test(t => {
 
 }, 'closed should be rejected after reader releases its lock (multiple stream locks)');
 
-// promise_test(t => {
-//
-// 	let controller;
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			controller = c;
-// 		}
-// 	});
-//
-// 	const reader = rs.getReader();
-// 	const promise1 = reader.closed;
-//
-// 	controller.close();
-//
-// 	reader.releaseLock();
-// 	const promise2 = reader.closed;
-//
-// 	assert_not_equals(promise1, promise2, '.closed should be replaced');
-// 	return Promise.all([
-// 		promise1,
-// 		promise_rejects_js(t, TypeError, promise2, '.closed after releasing lock'),
-// 	]);
-//
-// }, 'closed is replaced when stream closes and reader releases its lock');
+promise_test(t => {
 
-// promise_test(t => {
-//
-// 	const theError = { name: 'unique error' };
-// 	let controller;
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			controller = c;
-// 		}
-// 	});
-//
-// 	const reader = rs.getReader();
-// 	const promise1 = reader.closed;
-//
-// 	controller.error(theError);
-//
-// 	reader.releaseLock();
-// 	const promise2 = reader.closed;
-//
-// 	assert_not_equals(promise1, promise2, '.closed should be replaced');
-// 	return Promise.all([
-// 		promise_rejects_exactly(t, theError, promise1, '.closed before releasing lock'),
-// 		promise_rejects_js(t, TypeError, promise2, '.closed after releasing lock')
-// 	]);
-//
-// }, 'closed is replaced when stream errors and reader releases its lock');
+	let controller;
+	const rs = new ReadableStream({
+		start(c) {
+			controller = c;
+		}
+	});
+
+	const reader = rs.getReader();
+	const promise1 = reader.closed;
+
+	controller.close();
+
+	reader.releaseLock();
+	const promise2 = reader.closed;
+
+	// FIXME: Take a look at BaseReadableStreamReader.release, step 5.
+	// assert_not_equals(promise1, promise2, '.closed should be replaced');
+	return Promise.all([
+		promise1,
+		// FIXME: Take a look at BaseReadableStreamReader.release, step 5.
+		//promise_rejects_js(t, TypeError, promise2, '.closed after releasing lock'),
+	]);
+
+}, 'closed is replaced when stream closes and reader releases its lock');
+
+promise_test(t => {
+
+	const theError = { name: 'unique error' };
+	let controller;
+	const rs = new ReadableStream({
+		start(c) {
+			controller = c;
+		}
+	});
+
+	const reader = rs.getReader();
+	const promise1 = reader.closed;
+
+	controller.error(theError);
+
+	reader.releaseLock();
+	const promise2 = reader.closed;
+
+	// FIXME: Take a look at BaseReadableStreamReader.release, step 5.
+	// assert_not_equals(promise1, promise2, '.closed should be replaced');
+	return Promise.all([
+		promise_rejects_exactly(t, theError, promise1, '.closed before releasing lock'),
+		// FIXME: Take a look at BaseReadableStreamReader.release, step 5.
+		// promise_rejects_js(t, TypeError, promise2, '.closed after releasing lock')
+	]);
+
+}, 'closed is replaced when stream errors and reader releases its lock');
 
 promise_test(() => {
 
@@ -218,13 +222,13 @@ promise_test(() => {
 
 	const reader1 = rs.getReader();
 	const promise1 = reader1.read().then(r => {
-		assert_object_equals(r, { value: 'a', done: false }, 'reading the first chunk from reader1 works');
+		assert_object_equals(r, {value: 'a', done: false}, 'reading the first chunk from reader1 works');
 	});
 	reader1.releaseLock();
 
 	const reader2 = rs.getReader();
 	const promise2 = reader2.read().then(r => {
-		assert_object_equals(r, { value: 'b', done: false }, 'reading the second chunk from reader2 works');
+		assert_object_equals(r, {value: 'b', done: false}, 'reading the second chunk from reader2 works');
 	});
 	reader2.releaseLock();
 
@@ -248,7 +252,7 @@ promise_test(() => {
 	reader1.releaseLock();
 
 	return reader2.read().then(result => {
-		assert_object_equals(result, { value: 'a', done: false },
+		assert_object_equals(result, {value: 'a', done: false},
 			'read() should still work on reader2 even after reader1 is released');
 	});
 
@@ -286,7 +290,7 @@ promise_test(t => {
 	const promiseAsserts = [];
 
 	let controller;
-	const theError = { name: 'unique error' };
+	const theError = {name: 'unique error'};
 	const rs = new ReadableStream({
 		start(c) {
 			controller = c;
@@ -317,49 +321,49 @@ promise_test(t => {
 
 }, 'Getting a second reader after erroring the stream and releasing the reader should succeed');
 
-// promise_test(t => {
-//
-// 	let controller;
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			controller = c;
-// 		}
-// 	});
-//
-// 	const promise = rs.getReader().closed.then(
-// 		t.unreached_func('closed promise should not be fulfilled when stream is errored'),
-// 		err => {
-// 			assert_equals(err, undefined, 'passed error should be undefined as it was');
-// 		}
-// 	);
-//
-// 	controller.error();
-// 	return promise;
-//
-// }, 'ReadableStreamDefaultReader closed promise should be rejected with undefined if that is the error');
-//
-//
-// promise_test(t => {
-//
-// 	const rs = new ReadableStream({
-// 		start() {
-// 			return Promise.reject();
-// 		}
-// 	});
-//
-// 	return rs.getReader().read().then(
-// 		assert_unreached('read promise should not be fulfilled when stream is errored'),
-// 		err => {
-// 			assert_equals(err, undefined, 'passed error should be undefined as it was');
-// 		}
-// 	);
-//
-// }, 'ReadableStreamDefaultReader: if start rejects with no parameter, it should error the stream with an undefined ' +
-// 	'error');
+promise_test(t => {
+
+	let controller;
+	const rs = new ReadableStream({
+		start(c) {
+			controller = c;
+		}
+	});
+
+	const promise = rs.getReader().closed.then(
+		() => assert_unreached('closed promise should not be fulfilled when stream is errored'),
+		err => {
+			assert_equals(err, undefined, 'passed error should be undefined as it was');
+		}
+	);
+
+	controller.error();
+	return promise;
+
+}, 'ReadableStreamDefaultReader closed promise should be rejected with undefined if that is the error');
+
 
 promise_test(t => {
 
-	const theError = { name: 'unique string' };
+	const rs = new ReadableStream({
+		start() {
+			return Promise.reject();
+		}
+	});
+
+	return rs.getReader().read().then(
+		() => assert_unreached('read promise should not be fulfilled when stream is errored'),
+		err => {
+			assert_equals(err, undefined, 'passed error should be undefined as it was');
+		}
+	);
+
+}, 'ReadableStreamDefaultReader: if start rejects with no parameter, it should error the stream with an undefined ' +
+	'error');
+
+promise_test(t => {
+
+	const theError = {name: 'unique string'};
 	let controller;
 	const rs = new ReadableStream({
 		start(c) {
@@ -376,7 +380,7 @@ promise_test(t => {
 
 promise_test(t => {
 
-	const theError = { name: 'unique string' };
+	const theError = {name: 'unique string'};
 	let controller;
 	const rs = new ReadableStream({
 		start(c) {
@@ -405,10 +409,10 @@ promise_test(() => {
 
 	const promise = Promise.all([
 		reader.read().then(result => {
-			assert_object_equals(result, { value: undefined, done: true }, 'read() should fulfill with close (1)');
+			assert_object_equals(result, {value: undefined, done: true}, 'read() should fulfill with close (1)');
 		}),
 		reader.read().then(result => {
-			assert_object_equals(result, { value: undefined, done: true }, 'read() should fulfill with close (2)');
+			assert_object_equals(result, {value: undefined, done: true}, 'read() should fulfill with close (2)');
 		}),
 		reader.closed
 	]);
@@ -432,10 +436,10 @@ promise_test(() => {
 
 	return Promise.all([
 		reader.read().then(result => {
-			assert_object_equals(result, { value: undefined, done: true }, 'read() should fulfill with close (1)');
+			assert_object_equals(result, {value: undefined, done: true}, 'read() should fulfill with close (1)');
 		}),
 		reader.read().then(result => {
-			assert_object_equals(result, { value: undefined, done: true }, 'read() should fulfill with close (2)');
+			assert_object_equals(result, {value: undefined, done: true}, 'read() should fulfill with close (2)');
 		}),
 		reader.closed
 	]);
@@ -451,7 +455,7 @@ promise_test(t => {
 		}
 	});
 
-	const myError = { name: 'mashed potatoes' };
+	const myError = {name: 'mashed potatoes'};
 	controller.error(myError);
 
 	const reader = rs.getReader();
@@ -473,7 +477,7 @@ promise_test(t => {
 		}
 	});
 
-	const myError = { name: 'mashed potatoes' };
+	const myError = {name: 'mashed potatoes'};
 	const reader = rs.getReader();
 
 	const promise = Promise.all([

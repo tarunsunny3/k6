@@ -98,12 +98,12 @@ func NewReadableStreamDefaultControllerObject(controller *ReadableStreamDefaultC
 //
 // [specification]: https://streams.spec.whatwg.org/#rs-default-controller-close
 func (controller *ReadableStreamDefaultController) Close() {
-	// 1.
+	// 1. If ! ReadableStreamDefaultControllerCanCloseOrEnqueue(this) is false, throw a TypeError exception.
 	if !controller.canCloseOrEnqueue() {
 		throw(controller.stream.vu.Runtime(), newError(TypeError, "cannot close or enqueue"))
 	}
 
-	// 2.
+	// 2. Perform ! ReadableStreamDefaultControllerClose(this).
 	controller.close()
 }
 
@@ -131,6 +131,9 @@ func (controller *ReadableStreamDefaultController) Enqueue(chunk goja.Value) {
 //
 // [specification]: https://streams.spec.whatwg.org/#rs-default-controller-error
 func (controller *ReadableStreamDefaultController) Error(err goja.Value) {
+	if err == nil {
+		err = goja.Undefined()
+	}
 	controller.error(err)
 }
 
@@ -227,12 +230,12 @@ func (controller *ReadableStreamDefaultController) close() {
 	// 3. Set controller.[[closeRequested]] to true.
 	controller.closeRequested = true
 
-	// If controller.[[queue]] is empty
+	// 4. If controller.[[queue]] is empty,
 	if controller.queue.Len() == 0 {
-		// 1. Perform ! ReadableStreamDefaultControllerClearAlgorithms(controller).
+		// 4.1. Perform ! ReadableStreamDefaultControllerClearAlgorithms(controller).
 		controller.clearAlgorithms()
 
-		// 2. Perform ! ReadableStreamClose(stream).
+		// 4.2. Perform ! ReadableStreamClose(stream).
 		stream.close()
 	}
 }

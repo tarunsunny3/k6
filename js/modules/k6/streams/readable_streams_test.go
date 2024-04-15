@@ -108,18 +108,6 @@ func TestGeneral(t *testing.T) {
 	assert.NoError(t, gotErr)
 }
 
-func TestPatchedGlobal(t *testing.T) {
-	t.Parallel()
-
-	ts := newConfiguredRuntime(t)
-
-	gotErr := ts.EventLoop.Start(func() error {
-		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "patched-global.js")
-	})
-
-	assert.NoError(t, gotErr)
-}
-
 func TestReentrantStrategies(t *testing.T) {
 	t.Parallel()
 
@@ -127,6 +115,18 @@ func TestReentrantStrategies(t *testing.T) {
 
 	gotErr := ts.EventLoop.Start(func() error {
 		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "reentrant-strategies.js")
+	})
+
+	assert.NoError(t, gotErr)
+}
+
+func TestTemplated(t *testing.T) {
+	t.Parallel()
+
+	ts := newConfiguredRuntime(t)
+
+	gotErr := ts.EventLoop.Start(func() error {
+		return executeTestScripts(ts.VU.Runtime(), "./tests/readable-streams", "templated.js")
 	})
 
 	assert.NoError(t, gotErr)

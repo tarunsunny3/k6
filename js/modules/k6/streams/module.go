@@ -265,5 +265,10 @@ func (mi *ModuleInstance) NewReadableStreamDefaultReader(call goja.ConstructorCa
 	reader := &ReadableStreamDefaultReader{}
 	reader.setup(stream)
 
-	return rt.ToValue(reader).ToObject(rt)
+	object, err := NewReadableStreamDefaultReaderObject(reader)
+	if err != nil {
+		throw(rt, err)
+	}
+
+	return object
 }
