@@ -114,12 +114,12 @@ func (reader *BaseReadableStreamReader) release() {
 
 	// 2. Assert: stream is not undefined.
 	if stream == nil {
-		common.Throw(reader.stream.vu.Runtime(), newError(AssertionError, "stream is undefined"))
+		common.Throw(reader.vu.Runtime(), newError(AssertionError, "stream is undefined"))
 	}
 
 	// 3. Assert: stream.[[reader]] is reader.
 	if stream.reader == nil {
-		common.Throw(reader.stream.vu.Runtime(), newError(AssertionError, "stream is undefined"))
+		common.Throw(reader.vu.Runtime(), newError(AssertionError, "stream is undefined"))
 	}
 
 	var streamReader *BaseReadableStreamReader
@@ -130,20 +130,26 @@ func (reader *BaseReadableStreamReader) release() {
 	}
 
 	if reader != streamReader {
-		common.Throw(reader.stream.vu.Runtime(), newError(AssertionError, "stream reader isn't reader"))
+		common.Throw(reader.vu.Runtime(), newError(AssertionError, "stream reader isn't reader"))
 	}
 
 	// 4. If stream.[[state]] is "readable", reject reader.[[closedPromise]] with a TypeError exception.
 	if stream.state == ReadableStreamStateReadable {
 		//reader.closedPromiseRejectFunc(newError(TypeError, "stream is readable"))
 	} else { // 5. Otherwise, set reader.[[closedPromise]] to a promise rejected with a TypeError exception.
-		// FIXME: Looks like this depends on https://github.com/dop251/goja/issues/565
-		// As it is now, it will throw an error because the promise is rejected.
-		// But, we do actually want it to be rejected silently.
-		//reader.closedPromise = newRejectedPromise(stream.vu, newError(TypeError, "stream is not readable"))
+		reader.closedPromise = newRejectedPromise(stream.vu, newError(TypeError, "stream is not readable"))
 	}
 
-	// 6. Set reader.[[closedPromise]].[[PromiseIsHandled]] to true. Implicit?
+	// 6. Set reader.[[closedPromise]].[[PromiseIsHandled]] to true.
+	// FIXME: See https://github.com/dop251/goja/issues/565
+	var (
+		err       error
+		doNothing = func(goja.Value) {}
+	)
+	_, err = promiseThen(stream.vu.Runtime(), reader.closedPromise, doNothing, doNothing)
+	if err != nil {
+		common.Throw(stream.vu.Runtime(), newError(RuntimeError, err.Error()))
+	}
 
 	// 7. Perform ! stream.[[controller]].[[ReleaseSteps]]().
 	stream.controller.releaseSteps()
