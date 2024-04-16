@@ -142,7 +142,7 @@ promise_test(t => {
 	]);
 }, 'cancel() inside size() should work');
 
-// // FIXME: We don't have support yet for pipeTo() nor writable streams.
+// FIXME: We don't have support yet for pipeTo() nor writable streams.
 // promise_test(() => {
 // 	let controller;
 // 	let pipeToPromise;
@@ -177,6 +177,7 @@ promise_test(t => {
 // 	});
 // }, 'pipeTo() inside size() should behave as expected');
 
+// FIXME: This test is flaky.
 promise_test(() => {
 	let controller;
 	let readPromise;
