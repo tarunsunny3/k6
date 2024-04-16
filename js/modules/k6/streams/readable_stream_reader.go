@@ -150,6 +150,7 @@ func (reader *BaseReadableStreamReader) release() {
 
 	// 8. Set stream.[[reader]] to undefined.
 	stream.reader = nil
+	stream.Locked = false
 
 	// 9. Set reader.[[stream]] to undefined.
 	reader.stream = nil
@@ -179,6 +180,7 @@ func ReadableStreamReaderGenericInitialize(reader ReadableStreamGenericReader, s
 
 	// 2. Set stream.[[reader]] to reader.
 	stream.reader = reader
+	stream.Locked = true
 
 	promise, resolve, reject := stream.runtime.NewPromise()
 

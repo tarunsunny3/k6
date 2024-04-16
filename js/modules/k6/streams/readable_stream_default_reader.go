@@ -3,7 +3,6 @@ package streams
 import (
 	"github.com/dop251/goja"
 	"go.k6.io/k6/js/common"
-	"go.k6.io/k6/js/promises"
 )
 
 // ReadableStreamDefaultReader represents a default reader designed to be vended by a [ReadableStream].
@@ -57,27 +56,33 @@ func (reader *ReadableStreamDefaultReader) Read() *goja.Promise {
 	}
 
 	// 2. Let promise be a new promise.
-	promise, resolve, reject := promises.New(stream.vu)
+	promise, resolve, reject := stream.vu.Runtime().NewPromise()
 
 	// 3. Let readRequest be a new read request with the following items:
 	readRequest := ReadRequest{
 		chunkSteps: func(chunk any) {
-			go func() {
+			callback := reader.vu.RegisterCallback()
+			callback(func() error {
 				// Resolve promise with «[ "value" → chunk, "done" → false ]».
 				resolve(map[string]any{"value": chunk, "done": false})
-			}()
+				return nil
+			})
 		},
 		closeSteps: func() {
-			go func() {
+			callback := reader.vu.RegisterCallback()
+			callback(func() error {
 				// Resolve promise with «[ "value" → undefined, "done" → true ]».
 				resolve(map[string]any{"value": goja.Undefined(), "done": true})
-			}()
+				return nil
+			})
 		},
 		errorSteps: func(e any) {
-			go func() {
+			callback := reader.vu.RegisterCallback()
+			callback(func() error {
 				// Reject promise with e.
 				reject(e)
-			}()
+				return nil
+			})
 		},
 	}
 

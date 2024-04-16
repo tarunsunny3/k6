@@ -16,9 +16,8 @@ import (
 //
 // [readable stream]: https://streams.spec.whatwg.org/#rs-class
 type ReadableStream struct {
-	// FIXME: should be a public property of the object exposed to the runtime instead
-	// locked indicate whether or not the readable stream is locked to a reader
-	locked bool
+	// Locked indicate whether the readable stream is locked to a reader
+	Locked bool
 
 	// controller holds a [ReadableStreamDefaultController] or [ReadableByteStreamController] created
 	// with the ability to control the state and queue of this stream.
@@ -45,12 +44,6 @@ type ReadableStream struct {
 
 	runtime *goja.Runtime
 	vu      modules.VU
-}
-
-// Locked returns whether or not the readable stream is locked to a reader
-// FIXME: this should be a property
-func (stream *ReadableStream) Locked() bool {
-	return stream.isLocked()
 }
 
 // Cancel cancels the stream and returns a Promise to the user
@@ -140,6 +133,7 @@ func (stream *ReadableStream) isLocked() bool {
 func (stream *ReadableStream) initialize() {
 	stream.state = ReadableStreamStateReadable
 	stream.reader = nil
+	stream.Locked = false
 	stream.storedError = nil
 	stream.disturbed = false
 }
