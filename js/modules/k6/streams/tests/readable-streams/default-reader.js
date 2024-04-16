@@ -172,12 +172,10 @@ promise_test(t => {
 	reader.releaseLock();
 	const promise2 = reader.closed;
 
-	// FIXME: Take a look at BaseReadableStreamReader.release, step 5.
-	// assert_not_equals(promise1, promise2, '.closed should be replaced');
+	assert_not_equals(promise1, promise2, '.closed should be replaced');
 	return Promise.all([
 		promise1,
-		// FIXME: Take a look at BaseReadableStreamReader.release, step 5.
-		//promise_rejects_js(t, TypeError, promise2, '.closed after releasing lock'),
+		promise_rejects_js(t, TypeError, promise2, '.closed after releasing lock'),
 	]);
 
 }, 'closed is replaced when stream closes and reader releases its lock');
@@ -200,12 +198,10 @@ promise_test(t => {
 	reader.releaseLock();
 	const promise2 = reader.closed;
 
-	// FIXME: Take a look at BaseReadableStreamReader.release, step 5.
-	// assert_not_equals(promise1, promise2, '.closed should be replaced');
+	assert_not_equals(promise1, promise2, '.closed should be replaced');
 	return Promise.all([
 		promise_rejects_exactly(t, theError, promise1, '.closed before releasing lock'),
-		// FIXME: Take a look at BaseReadableStreamReader.release, step 5.
-		// promise_rejects_js(t, TypeError, promise2, '.closed after releasing lock')
+		promise_rejects_js(t, TypeError, promise2, '.closed after releasing lock')
 	]);
 
 }, 'closed is replaced when stream errors and reader releases its lock');
