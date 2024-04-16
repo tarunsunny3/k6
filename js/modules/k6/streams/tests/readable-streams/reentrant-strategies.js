@@ -142,8 +142,7 @@ promise_test(t => {
 	]);
 }, 'cancel() inside size() should work');
 
-// FIXME @joanlopez: make this pass.
-// We don't have support yet for pipeTo() nor writable streams.
+// // FIXME: We don't have support yet for pipeTo() nor writable streams.
 // promise_test(() => {
 // 	let controller;
 // 	let pipeToPromise;
@@ -178,53 +177,51 @@ promise_test(t => {
 // 	});
 // }, 'pipeTo() inside size() should behave as expected');
 
-// FIXME @joanlopez: make this pass.
-// Not sure why it fails, review ReadableStreamDefaultReader.Read() async code.
-// promise_test(() => {
-// 	let controller;
-// 	let readPromise;
-// 	let calls = 0;
-// 	let readResolved = false;
-// 	let reader;
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			controller = c;
-// 		}
-// 	}, {
-// 		size() {
-// 			// This is triggered by controller.enqueue(). The queue is empty and there are no pending reads. This read is
-// 			// added to the list of pending reads.
-// 			readPromise = reader.read();
-// 			++calls;
-// 			return 1;
-// 		},
-// 		highWaterMark: 0
-// 	});
-// 	reader = rs.getReader();
-// 	controller.enqueue('a');
-// 	readPromise.then(() => {
-// 		readResolved = true;
-// 	});
-// 	return flushAsyncEvents().then(() => {
-// 		assert_false(readResolved);
-// 		controller.enqueue('b');
-// 		assert_equals(calls, 1, 'size() should have been called once');
-// 		return delay(0);
-// 	}).then(() => {
-// 		assert_true(readResolved);
-// 		assert_equals(calls, 1, 'size() should only be called once');
-// 		return readPromise;
-// 	}).then(({ value, done }) => {
-// 		assert_false(done, 'done should be false');
-// 		// See https://github.com/whatwg/streams/issues/794 for why this chunk is not 'a'.
-// 		assert_equals(value, 'b', 'chunk should have been read');
-// 		assert_equals(calls, 1, 'calls should still be 1');
-// 		return reader.read();
-// 	}).then(({ value, done }) => {
-// 		assert_false(done, 'done should be false again');
-// 		assert_equals(value, 'a', 'chunk a should come after b');
-// 	});
-// }, 'read() inside of size() should behave as expected');
+promise_test(() => {
+	let controller;
+	let readPromise;
+	let calls = 0;
+	let readResolved = false;
+	let reader;
+	const rs = new ReadableStream({
+		start(c) {
+			controller = c;
+		}
+	}, {
+		size() {
+			// This is triggered by controller.enqueue(). The queue is empty and there are no pending reads. This read is
+			// added to the list of pending reads.
+			readPromise = reader.read();
+			++calls;
+			return 1;
+		},
+		highWaterMark: 0
+	});
+	reader = rs.getReader();
+	controller.enqueue('a');
+	readPromise.then(() => {
+		readResolved = true;
+	});
+	return flushAsyncEvents().then(() => {
+		assert_false(readResolved);
+		controller.enqueue('b');
+		assert_equals(calls, 1, 'size() should have been called once');
+		return delay(0);
+	}).then(() => {
+		assert_true(readResolved);
+		assert_equals(calls, 1, 'size() should only be called once');
+		return readPromise;
+	}).then(({ value, done }) => {
+		assert_false(done, 'done should be false');
+		// See https://github.com/whatwg/streams/issues/794 for why this chunk is not 'a'.
+		assert_equals(value, 'b', 'chunk should have been read');
+		assert_equals(calls, 1, 'calls should still be 1');
+		return reader.read();
+	}).then(({ value, done }) => {
+		assert_false(done, 'done should be false again');
+		assert_equals(value, 'a', 'chunk a should come after b');
+	});
+}, 'read() inside of size() should behave as expected');
 
 promise_test(() => {
 	let controller;
@@ -246,8 +243,7 @@ promise_test(() => {
 	});
 }, 'getReader() inside size() should work');
 
-// FIXME @joanlopez: make this pass.
-// We don't have support yet for tee().
+// FIXME: We don't have support yet for tee().
 // promise_test(() => {
 // 	let controller;
 // 	let branch1;
