@@ -361,43 +361,47 @@ func (stream *ReadableStream) setupDefaultController(
 	startResult := startAlgorithm(controllerObj)
 
 	// 10. Let startPromise be a promise with startResult.
-	var startPromise *goja.Promise
-	if common.IsNullish(startResult) {
-		startPromise = newResolvedPromise(controller.stream.vu, startResult)
-	} else if p, ok := startResult.Export().(*goja.Promise); ok {
-		if p.State() == goja.PromiseStateRejected {
-			controller.error(p.Result())
+	// See below
+
+	// 11. Upon fulfillment of startPromise,
+	onFulfill := func(goja.Value) {
+		// 11.1. Set controller.[[started]] to true.
+		controller.started = true
+
+		// 11.2. Assert: controller.[[pulling]] is false.
+		if controller.pulling {
+			common.Throw(stream.vu.Runtime(), newError(AssertionError, "controller `pulling` state is not false"))
 		}
-		startPromise = p
-	} else {
-		startPromise = newResolvedPromise(controller.stream.vu, startResult)
+
+		// 11.3. Assert: controller.[[pullAgain]] is false.
+		if controller.pullAgain {
+			common.Throw(stream.vu.Runtime(), newError(AssertionError, "controller `pullAgain` state is not false"))
+		}
+
+		// 11.4. Perform ! ReadableStreamDefaultControllerCallPullIfNeeded(controller).
+		controller.callPullIfNeeded()
 	}
 
-	_, err = promiseThen(stream.vu.Runtime(), startPromise,
-		// 11. Upon fulfillment of startPromise,
-		func(goja.Value) {
-			// 11.1. Set controller.[[started]] to true.
-			controller.started = true
+	// 12. Upon rejection of startPromise with reason r,
+	onReject := func(err goja.Value) {
+		controller.error(err)
+	}
 
-			// 11.2. Assert: controller.[[pulling]] is false.
-			if controller.pulling {
-				common.Throw(stream.vu.Runtime(), newError(AssertionError, "controller `pulling` state is not false"))
-			}
+	if common.IsNullish(startResult) {
+		onFulfill(startResult)
+		return
+	}
 
-			// 11.3. Assert: controller.[[pullAgain]] is false.
-			if controller.pullAgain {
-				common.Throw(stream.vu.Runtime(), newError(AssertionError, "controller `pullAgain` state is not false"))
-			}
+	p, ok := startResult.Export().(*goja.Promise)
+	if !ok {
+		onFulfill(startResult)
+		return
+	}
 
-			// 11.4. Perform ! ReadableStreamDefaultControllerCallPullIfNeeded(controller).
-			controller.callPullIfNeeded()
-		},
-
-		// 12. Upon rejection of startPromise with reason r,
-		func(err goja.Value) {
-			controller.error(err)
-		},
-	)
+	if p.State() == goja.PromiseStateRejected {
+		onReject(p.Result())
+	}
+	_, err = promiseThen(stream.vu.Runtime(), p, onFulfill, onReject)
 	if err != nil {
 		common.Throw(stream.vu.Runtime(), err)
 	}
@@ -673,7 +677,10 @@ func (stream *ReadableStream) close() {
 		// 6.3. For each readRequest of readRequests,
 		for _, readRequest := range readRequests {
 			// 6.3.1. Perform readRequest’s close steps.
-			readRequest.closeSteps()
+			stream.vu.RegisterCallback()(func() error {
+				readRequest.closeSteps()
+				return nil
+			})
 		}
 	}
 }
@@ -801,12 +808,20 @@ func (stream *ReadableStream) fulfillReadRequest(chunk any, done bool) {
 	// 5. Remove readRequest from reader.[[readRequests]].
 	reader.readRequests = reader.readRequests[1:]
 
+	callback := reader.vu.RegisterCallback()
 	if done {
 		// 6. If done is true, perform readRequest’s close steps.
-		readRequest.closeSteps()
+		callback(func() error {
+			readRequest.closeSteps()
+			return nil
+		})
+
 	} else {
 		// 7. Otherwise, perform readRequest’s chunk steps, given chunk.
-		readRequest.chunkSteps(chunk)
+		callback(func() error {
+			readRequest.chunkSteps(chunk)
+			return nil
+		})
 	}
 }
 

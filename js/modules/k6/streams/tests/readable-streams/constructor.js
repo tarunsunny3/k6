@@ -1,5 +1,5 @@
 // Original source file: https://github.com/web-platform-tests/wpt/blob/e955fbc72b5a98e1c2dc6a6c1a048886c8a99785/streams/readable-streams/constructor.any.js
-
+// META: global=window,worker,shadowrealm
 'use strict';
 
 const error1 = new Error('error1');

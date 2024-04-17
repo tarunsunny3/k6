@@ -1,4 +1,4 @@
-// // Original source file: https://github.com/web-platform-tests/wpt/blob/3fd901dba4d461afda4cf9b692f8bd99fb05f4e1/streams/readable-streams/default-reader.any.js
+// Original source file: https://github.com/web-platform-tests/wpt/blob/3fd901dba4d461afda4cf9b692f8bd99fb05f4e1/streams/readable-streams/default-reader.any.js
 // META: global=window,worker,shadowrealm
 // META: script=../resources/rs-utils.js
 'use strict';
@@ -89,7 +89,7 @@ promise_test(() => {
 	const reader = rs.getReader();
 
 	const promise = reader.read().then(result => {
-		assert_object_equals(result, {value: 'a', done: false}, 'read() should fulfill with the enqueued chunk');
+		assert_object_equals(result, { value: 'a', done: false }, 'read() should fulfill with the enqueued chunk');
 	});
 
 	controller.enqueue('a');
@@ -218,13 +218,13 @@ promise_test(() => {
 
 	const reader1 = rs.getReader();
 	const promise1 = reader1.read().then(r => {
-		assert_object_equals(r, {value: 'a', done: false}, 'reading the first chunk from reader1 works');
+		assert_object_equals(r, { value: 'a', done: false }, 'reading the first chunk from reader1 works');
 	});
 	reader1.releaseLock();
 
 	const reader2 = rs.getReader();
 	const promise2 = reader2.read().then(r => {
-		assert_object_equals(r, {value: 'b', done: false}, 'reading the second chunk from reader2 works');
+		assert_object_equals(r, { value: 'b', done: false }, 'reading the second chunk from reader2 works');
 	});
 	reader2.releaseLock();
 
@@ -248,7 +248,7 @@ promise_test(() => {
 	reader1.releaseLock();
 
 	return reader2.read().then(result => {
-		assert_object_equals(result, {value: 'a', done: false},
+		assert_object_equals(result, { value: 'a', done: false },
 			'read() should still work on reader2 even after reader1 is released');
 	});
 
@@ -286,7 +286,7 @@ promise_test(t => {
 	const promiseAsserts = [];
 
 	let controller;
-	const theError = {name: 'unique error'};
+	const theError = { name: 'unique error' };
 	const rs = new ReadableStream({
 		start(c) {
 			controller = c;
@@ -359,7 +359,7 @@ promise_test(t => {
 
 promise_test(t => {
 
-	const theError = {name: 'unique string'};
+	const theError = { name: 'unique string' };
 	let controller;
 	const rs = new ReadableStream({
 		start(c) {
@@ -376,7 +376,7 @@ promise_test(t => {
 
 promise_test(t => {
 
-	const theError = {name: 'unique string'};
+	const theError = { name: 'unique string' };
 	let controller;
 	const rs = new ReadableStream({
 		start(c) {
@@ -405,10 +405,10 @@ promise_test(() => {
 
 	const promise = Promise.all([
 		reader.read().then(result => {
-			assert_object_equals(result, {value: undefined, done: true}, 'read() should fulfill with close (1)');
+			assert_object_equals(result, { value: undefined, done: true }, 'read() should fulfill with close (1)');
 		}),
 		reader.read().then(result => {
-			assert_object_equals(result, {value: undefined, done: true}, 'read() should fulfill with close (2)');
+			assert_object_equals(result, { value: undefined, done: true }, 'read() should fulfill with close (2)');
 		}),
 		reader.closed
 	]);
@@ -432,10 +432,10 @@ promise_test(() => {
 
 	return Promise.all([
 		reader.read().then(result => {
-			assert_object_equals(result, {value: undefined, done: true}, 'read() should fulfill with close (1)');
+			assert_object_equals(result, { value: undefined, done: true }, 'read() should fulfill with close (1)');
 		}),
 		reader.read().then(result => {
-			assert_object_equals(result, {value: undefined, done: true}, 'read() should fulfill with close (2)');
+			assert_object_equals(result, { value: undefined, done: true }, 'read() should fulfill with close (2)');
 		}),
 		reader.closed
 	]);
@@ -451,7 +451,7 @@ promise_test(t => {
 		}
 	});
 
-	const myError = {name: 'mashed potatoes'};
+	const myError = { name: 'mashed potatoes' };
 	controller.error(myError);
 
 	const reader = rs.getReader();
@@ -473,7 +473,7 @@ promise_test(t => {
 		}
 	});
 
-	const myError = {name: 'mashed potatoes'};
+	const myError = { name: 'mashed potatoes' };
 	const reader = rs.getReader();
 
 	const promise = Promise.all([
@@ -496,7 +496,7 @@ test(() => {
 			return '';
 		}
 	};
-	assert_throws_js(TypeError, () => rs.getReader({mode}), 'getReader() should throw');
+	assert_throws_js(TypeError, () => rs.getReader({ mode }), 'getReader() should throw');
 	assert_true(toStringCalled, 'toString() should be called');
 }, 'getReader() should call ToString() on mode');
 
@@ -531,7 +531,7 @@ promise_test(t => {
 
 	const reader2 = rs.getReader();
 	const promise2 = reader2.read().then(r => {
-		assert_object_equals(r, {value: 'a', done: false}, 'read() from reader2 should resolve with enqueued chunk');
+		assert_object_equals(r, { value: 'a', done: false }, 'read() from reader2 should resolve with enqueued chunk');
 	})
 	reader2.releaseLock();
 

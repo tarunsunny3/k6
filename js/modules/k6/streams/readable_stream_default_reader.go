@@ -61,28 +61,16 @@ func (reader *ReadableStreamDefaultReader) Read() *goja.Promise {
 	// 3. Let readRequest be a new read request with the following items:
 	readRequest := ReadRequest{
 		chunkSteps: func(chunk any) {
-			callback := reader.vu.RegisterCallback()
-			callback(func() error {
-				// Resolve promise with «[ "value" → chunk, "done" → false ]».
-				resolve(map[string]any{"value": chunk, "done": false})
-				return nil
-			})
+			// Resolve promise with «[ "value" → chunk, "done" → false ]».
+			resolve(map[string]any{"value": chunk, "done": false})
 		},
 		closeSteps: func() {
-			callback := reader.vu.RegisterCallback()
-			callback(func() error {
-				// Resolve promise with «[ "value" → undefined, "done" → true ]».
-				resolve(map[string]any{"value": goja.Undefined(), "done": true})
-				return nil
-			})
+			// Resolve promise with «[ "value" → undefined, "done" → true ]».
+			resolve(map[string]any{"value": goja.Undefined(), "done": true})
 		},
 		errorSteps: func(e any) {
-			callback := reader.vu.RegisterCallback()
-			callback(func() error {
-				// Reject promise with e.
-				reject(e)
-				return nil
-			})
+			// Reject promise with e.
+			reject(e)
 		},
 	}
 
@@ -191,7 +179,10 @@ func (reader *ReadableStreamDefaultReader) errorReadRequests(e any) {
 	// 3. For each readRequest of readRequests,
 	for _, request := range readRequests {
 		// 3.1. Perform readRequest’s error steps, given e.
-		request.errorSteps(e)
+		reader.vu.RegisterCallback()(func() error {
+			request.errorSteps(e)
+			return nil
+		})
 	}
 }
 

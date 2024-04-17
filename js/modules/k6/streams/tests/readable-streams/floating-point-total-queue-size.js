@@ -1,5 +1,4 @@
 // Original file: https://github.com/web-platform-tests/wpt/blob/650b3165efdfeca34285495bb121c407aa9d7e68/streams/readable-streams/floating-point-total-queue-size.any.js
-
 // META: global=window,worker,shadowrealm
 'use strict';
 

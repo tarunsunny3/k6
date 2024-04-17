@@ -209,32 +209,31 @@ promise_test(() => {
 
 }, 'Underlying source: calling close twice on an empty stream should throw the second time');
 
-// FIXME: @joanlopez - the issue is with the order of execution: closed, read
-// promise_test(() => {
-//
-// 	let startCalled = false;
-// 	let readCalled = false;
-// 	const reader = new ReadableStream({
-// 		start(c) {
-// 			c.enqueue('a');
-// 			c.close();
-// 			assert_throws_js(TypeError, () => c.close(), 'second call to close should throw a TypeError');
-// 			startCalled = true;
-// 		}
-// 	}).getReader();
-//
-// 	return Promise.all([
-// 		reader.read().then(r => {
-// 			assert_object_equals(r, { value: 'a', done: false }, 'read() should read the enqueued chunk');
-// 			readCalled = true;
-// 		}),
-// 		reader.closed.then(() => {
-// 			assert_true(startCalled);
-// 			assert_true(readCalled);
-// 		})
-// 	]);
-//
-// }, 'Underlying source: calling close twice on a non-empty stream should throw the second time');
+promise_test(() => {
+
+	let startCalled = false;
+	let readCalled = false;
+	const reader = new ReadableStream({
+		start(c) {
+			c.enqueue('a');
+			c.close();
+			assert_throws_js(TypeError, () => c.close(), 'second call to close should throw a TypeError');
+			startCalled = true;
+		}
+	}).getReader();
+
+	return Promise.all([
+		reader.read().then(r => {
+			assert_object_equals(r, { value: 'a', done: false }, 'read() should read the enqueued chunk');
+			readCalled = true;
+		}),
+		reader.closed.then(() => {
+			assert_true(startCalled);
+			assert_true(readCalled);
+		})
+	]);
+
+}, 'Underlying source: calling close twice on a non-empty stream should throw the second time');
 
 promise_test(() => {
 
@@ -379,25 +378,24 @@ promise_test(() => {
 
 const error1 = { name: 'error1' };
 
-// FIXME: @joanlopez - pullShouldThrow is assigned before the first pull
-// promise_test(t => {
-//
-// 	let pullShouldThrow = false;
-// 	const rs = new ReadableStream({
-// 		pull(controller) {
-// 			if (pullShouldThrow) {
-// 				throw error1;
-// 			}
-// 			controller.enqueue(0);
-// 		}
-// 	}, new CountQueuingStrategy({highWaterMark: 1}));
-// 	const reader = rs.getReader();
-// 	return Promise.resolve().then(() => {
-// 		pullShouldThrow = true;
-// 		return Promise.all([
-// 			reader.read(),
-// 			promise_rejects_exactly(t, error1, reader.closed, '.closed promise should reject')
-// 		]);
-// 	});
-//
-// }, 'read should not error if it dequeues and pull() throws');
+promise_test(t => {
+
+	let pullShouldThrow = false;
+	const rs = new ReadableStream({
+		pull(controller) {
+			if (pullShouldThrow) {
+				throw error1;
+			}
+			controller.enqueue(0);
+		}
+	}, new CountQueuingStrategy({highWaterMark: 1}));
+	const reader = rs.getReader();
+	return Promise.resolve().then(() => {
+		pullShouldThrow = true;
+		return Promise.all([
+			reader.read(),
+			promise_rejects_exactly(t, error1, reader.closed, '.closed promise should reject')
+		]);
+	});
+
+}, 'read should not error if it dequeues and pull() throws');

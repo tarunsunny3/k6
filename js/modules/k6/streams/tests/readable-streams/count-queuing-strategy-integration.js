@@ -1,3 +1,4 @@
+// Original source file: https://github.com/web-platform-tests/wpt/blob/f0d6f241e3a16ddd6e0a3ebcd9cb814b408bc5a6/streams/readable-streams/count-queuing-strategy-integration.any.js
 // META: global=window,worker,shadowrealm
 'use strict';
 

@@ -92,7 +92,7 @@ promise_test(() => {
 	}).then(() => {
 		return reader.read();
 	}).then(result => {
-		assert_object_equals(result, {value: 'a', done: false}, 'read() should still work after the attempted cancel');
+		assert_object_equals(result, { value: 'a', done: false }, 'read() should still work after the attempted cancel');
 		return reader.closed;
 	});
 
