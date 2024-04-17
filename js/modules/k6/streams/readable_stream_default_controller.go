@@ -77,6 +77,12 @@ func NewReadableStreamDefaultControllerObject(controller *ReadableStreamDefaultC
 	}
 
 	// Exposing the properties of the [ReadableStreamController] interface
+	if err := setReadOnlyPropertyOf(obj, "constructor", rt.ToValue(func() goja.Value {
+		return rt.ToValue(&ReadableStreamDefaultController{})
+	})); err != nil {
+		return nil, err
+	}
+
 	if err := setReadOnlyPropertyOf(obj, "close", rt.ToValue(controller.Close)); err != nil {
 		return nil, err
 	}
@@ -89,7 +95,7 @@ func NewReadableStreamDefaultControllerObject(controller *ReadableStreamDefaultC
 		return nil, err
 	}
 
-	return obj, nil
+	return rt.CreateObject(obj), nil
 }
 
 // Close closes the stream.

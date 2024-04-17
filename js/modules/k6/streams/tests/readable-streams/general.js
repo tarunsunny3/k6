@@ -78,50 +78,45 @@ test(() => {
 
 }, 'ReadableStream constructor will not tolerate initial garbage as pull argument');
 
-// FIXME @joanlopez: make this pass.
-// Can we revisit the manipulation of this?
-// test(() => {
-//
-// 	let startCalled = false;
-//
-// 	const source = {
-// 		start() {
-// 			throw Object.keys(this);
-// 			assert_true(this, source, 'source is this during start');
-// 			startCalled = true;
-// 		}
-// 	};
-//
-// 	new ReadableStream(source);
-// 	assert_true(startCalled);
-//
-// }, 'ReadableStream start should be called with the proper thisArg');
+test(() => {
 
-// FIXME @joanlopez: make this pass.
-// Tricky manipulation of JS objects. Is it feasible?
-// test(() => {
-//
-// 	let startCalled = false;
-// 	const source = {
-// 		start(controller) {
-// 			const properties = ['close', 'constructor', 'desiredSize', 'enqueue', 'error'];
-// 			assert_array_equals(Object.getOwnPropertyNames(Object.getPrototypeOf(controller)).sort(), properties,
-// 				'prototype should have the right properties');
-//
-// 			controller.test = '';
-// 			assert_array_equals(Object.getOwnPropertyNames(Object.getPrototypeOf(controller)).sort(), properties,
-// 				'prototype should still have the right properties');
-// 			assert_not_equals(Object.getOwnPropertyNames(controller).indexOf('test'), -1,
-// 				'"test" should be a property of the controller');
-//
-// 			startCalled = true;
-// 		}
-// 	};
-//
-// 	new ReadableStream(source);
-// 	assert_true(startCalled);
-//
-// }, 'ReadableStream start controller parameter should be extensible');
+	let startCalled = false;
+
+	const source = {
+		start() {
+			assert_true(this, source, 'source is this during start');
+			startCalled = true;
+		}
+	};
+
+	new ReadableStream(source);
+	assert_true(startCalled);
+
+}, 'ReadableStream start should be called with the proper thisArg');
+
+test(() => {
+
+	let startCalled = false;
+	const source = {
+		start(controller) {
+			const properties = ['close', 'constructor', 'desiredSize', 'enqueue', 'error'];
+			assert_array_equals(Object.getOwnPropertyNames(Object.getPrototypeOf(controller)).sort(), properties,
+				'prototype should have the right properties');
+
+			controller.test = '';
+			assert_array_equals(Object.getOwnPropertyNames(Object.getPrototypeOf(controller)).sort(), properties,
+				'prototype should still have the right properties');
+			assert_not_equals(Object.getOwnPropertyNames(controller).indexOf('test'), -1,
+				'"test" should be a property of the controller');
+
+			startCalled = true;
+		}
+	};
+
+	new ReadableStream(source);
+	assert_true(startCalled);
+
+}, 'ReadableStream start controller parameter should be extensible');
 
 test(() => {
 	(new ReadableStream()).getReader(undefined);
@@ -263,33 +258,33 @@ promise_test(() => {
 
 }, 'ReadableStream: should only call pull once upon starting the stream');
 
-// promise_test(() => {
-//
-// 	let pullCount = 0;
-//
-// 	const rs = new ReadableStream({
-// 		pull(c) {
-// 			// Don't enqueue immediately after start. We want the stream to be empty when we call .read() on it.
-// 			if (pullCount > 0) {
-// 				c.enqueue(pullCount);
-// 			}
-// 			++pullCount;
-// 		}
-// 	});
-//
-// 	return flushAsyncEvents().then(() => {
-// 		assert_equals(pullCount, 1, 'pull should be called once start finishes');
-// 	}).then(() => {
-// 		const reader = rs.getReader();
-// 		const read = reader.read();
-// 		assert_equals(pullCount, 2, 'pull should be called when read is called');
-// 		return read;
-// 	}).then(result => {
-// 		assert_equals(pullCount, 3, 'pull should be called again in reaction to calling read');
-// 		assert_object_equals(result, { value: 1, done: false }, 'the result read should be the one enqueued');
-// 	});
-//
-// }, 'ReadableStream: should call pull when trying to read from a started, empty stream');
+promise_test(() => {
+
+	let pullCount = 0;
+
+	const rs = new ReadableStream({
+		pull(c) {
+			// Don't enqueue immediately after start. We want the stream to be empty when we call .read() on it.
+			if (pullCount > 0) {
+				c.enqueue(pullCount);
+			}
+			++pullCount;
+		}
+	});
+
+	return flushAsyncEvents().then(() => {
+		assert_equals(pullCount, 1, 'pull should be called once start finishes');
+	}).then(() => {
+		const reader = rs.getReader();
+		const read = reader.read();
+		assert_equals(pullCount, 2, 'pull should be called when read is called');
+		return read;
+	}).then(result => {
+		assert_equals(pullCount, 3, 'pull should be called again in reaction to calling read');
+		assert_object_equals(result, { value: 1, done: false }, 'the result read should be the one enqueued');
+	});
+
+}, 'ReadableStream: should call pull when trying to read from a started, empty stream');
 
 // FIXME: Revisit this test.
 // promise_test(() => {
@@ -321,103 +316,100 @@ promise_test(() => {
 //
 // }, 'ReadableStream: should only call pull once on a non-empty stream read from before start fulfills');
 
-// FIXME: Revisit this test.
-// promise_test(() => {
-//
-// 	let pullCount = 0;
-// 	const startPromise = Promise.resolve();
-//
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			c.enqueue('a');
-// 		},
-// 		pull() {
-// 			pullCount++;
-// 		}
-// 	});
-//
-// 	return flushAsyncEvents().then(() => {
-// 		assert_equals(pullCount, 0, 'pull should not be called once start finishes, since the queue is full');
-//
-// 		const read = rs.getReader().read();
-// 		assert_equals(pullCount, 1, 'calling read() should cause pull to be called immediately');
-// 		return read;
-// 	}).then(r => {
-// 		assert_object_equals(r, { value: 'a', done: false }, 'first read() should return first chunk');
-// 		return delay(10);
-// 	}).then(() => {
-// 		assert_equals(pullCount, 1, 'pull should be called exactly once');
-// 	});
-//
-// }, 'ReadableStream: should only call pull once on a non-empty stream read from after start fulfills');
+promise_test(() => {
 
-// FIXME: Revisit this test.
-// promise_test(() => {
-//
-// 	let pullCount = 0;
-// 	let controller;
-//
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			controller = c;
-// 		},
-// 		pull() {
-// 			++pullCount;
-// 		}
-// 	});
-//
-// 	const reader = rs.getReader();
-// 	return flushAsyncEvents().then(() => {
-// 		assert_equals(pullCount, 1, 'pull should have been called once by the time the stream starts');
-//
-// 		controller.enqueue('a');
-// 		assert_equals(pullCount, 1, 'pull should not have been called again after enqueue');
-//
-// 		return reader.read();
-// 	}).then(() => {
-// 		assert_equals(pullCount, 2, 'pull should have been called again after read');
-//
-// 		return delay(10);
-// 	}).then(() => {
-// 		assert_equals(pullCount, 2, 'pull should be called exactly twice');
-// 	});
-// }, 'ReadableStream: should call pull in reaction to read()ing the last chunk, if not draining');
+	let pullCount = 0;
+	const startPromise = Promise.resolve();
 
-// FIXME: Revisit this test.
-// promise_test(() => {
-//
-// 	let pullCount = 0;
-// 	let controller;
-//
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			controller = c;
-// 		},
-// 		pull() {
-// 			++pullCount;
-// 		}
-// 	});
-//
-// 	const reader = rs.getReader();
-//
-// 	return flushAsyncEvents().then(() => {
-// 		assert_equals(pullCount, 1, 'pull should have been called once by the time the stream starts');
-//
-// 		controller.enqueue('a');
-// 		assert_equals(pullCount, 1, 'pull should not have been called again after enqueue');
-//
-// 		controller.close();
-//
-// 		return reader.read();
-// 	}).then(() => {
-// 		assert_equals(pullCount, 1, 'pull should not have been called a second time after read');
-//
-// 		return delay(10);
-// 	}).then(() => {
-// 		assert_equals(pullCount, 1, 'pull should be called exactly once');
-// 	});
-//
-// }, 'ReadableStream: should not call pull() in reaction to read()ing the last chunk, if draining');
+	const rs = new ReadableStream({
+		start(c) {
+			c.enqueue('a');
+		},
+		pull() {
+			pullCount++;
+		}
+	});
+
+	return flushAsyncEvents().then(() => {
+		assert_equals(pullCount, 0, 'pull should not be called once start finishes, since the queue is full');
+
+		const read = rs.getReader().read();
+		assert_equals(pullCount, 1, 'calling read() should cause pull to be called immediately');
+		return read;
+	}).then(r => {
+		assert_object_equals(r, { value: 'a', done: false }, 'first read() should return first chunk');
+		return delay(10);
+	}).then(() => {
+		assert_equals(pullCount, 1, 'pull should be called exactly once');
+	});
+
+}, 'ReadableStream: should only call pull once on a non-empty stream read from after start fulfills');
+
+promise_test(() => {
+
+	let pullCount = 0;
+	let controller;
+
+	const rs = new ReadableStream({
+		start(c) {
+			controller = c;
+		},
+		pull() {
+			++pullCount;
+		}
+	});
+
+	const reader = rs.getReader();
+	return flushAsyncEvents().then(() => {
+		assert_equals(pullCount, 1, 'pull should have been called once by the time the stream starts');
+
+		controller.enqueue('a');
+		assert_equals(pullCount, 1, 'pull should not have been called again after enqueue');
+
+		return reader.read();
+	}).then(() => {
+		assert_equals(pullCount, 2, 'pull should have been called again after read');
+
+		return delay(10);
+	}).then(() => {
+		assert_equals(pullCount, 2, 'pull should be called exactly twice');
+	});
+}, 'ReadableStream: should call pull in reaction to read()ing the last chunk, if not draining');
+
+promise_test(() => {
+
+	let pullCount = 0;
+	let controller;
+
+	const rs = new ReadableStream({
+		start(c) {
+			controller = c;
+		},
+		pull() {
+			++pullCount;
+		}
+	});
+
+	const reader = rs.getReader();
+
+	return flushAsyncEvents().then(() => {
+		assert_equals(pullCount, 1, 'pull should have been called once by the time the stream starts');
+
+		controller.enqueue('a');
+		assert_equals(pullCount, 1, 'pull should not have been called again after enqueue');
+
+		controller.close();
+
+		return reader.read();
+	}).then(() => {
+		assert_equals(pullCount, 1, 'pull should not have been called a second time after read');
+
+		return delay(10);
+	}).then(() => {
+		assert_equals(pullCount, 1, 'pull should be called exactly once');
+	});
+
+}, 'ReadableStream: should not call pull() in reaction to read()ing the last chunk, if draining');
 
 promise_test(() => {
 
@@ -453,51 +445,50 @@ promise_test(() => {
 
 }, 'ReadableStream: should not call pull until the previous pull call\'s promise fulfills');
 
-// FIXME: Revisit this test.
-// promise_test(() => {
-//
-// 	let timesCalled = 0;
-//
-// 	const rs = new ReadableStream(
-// 		{
-// 			start(c) {
-// 				c.enqueue('a');
-// 				c.enqueue('b');
-// 				c.enqueue('c');
-// 			},
-// 			pull() {
-// 				++timesCalled;
-// 			}
-// 		},
-// 		{
-// 			size() {
-// 				return 1;
-// 			},
-// 			highWaterMark: Infinity
-// 		}
-// 	);
-// 	const reader = rs.getReader();
-//
-// 	return flushAsyncEvents().then(() => {
-// 		return reader.read();
-// 	}).then(result1 => {
-// 		assert_object_equals(result1, { value: 'a', done: false }, 'first chunk should be as expected');
-//
-// 		return reader.read();
-// 	}).then(result2 => {
-// 		assert_object_equals(result2, { value: 'b', done: false }, 'second chunk should be as expected');
-//
-// 		return reader.read();
-// 	}).then(result3 => {
-// 		assert_object_equals(result3, { value: 'c', done: false }, 'third chunk should be as expected');
-//
-// 		return delay(10);
-// 	}).then(() => {
-// 		// Once for after start, and once for every read.
-// 		assert_equals(timesCalled, 4, 'pull() should be called exactly four times');
-// 	});
-//
-// }, 'ReadableStream: should pull after start, and after every read');
+promise_test(() => {
+
+	let timesCalled = 0;
+
+	const rs = new ReadableStream(
+		{
+			start(c) {
+				c.enqueue('a');
+				c.enqueue('b');
+				c.enqueue('c');
+			},
+			pull() {
+				++timesCalled;
+			}
+		},
+		{
+			size() {
+				return 1;
+			},
+			highWaterMark: Infinity
+		}
+	);
+	const reader = rs.getReader();
+
+	return flushAsyncEvents().then(() => {
+		return reader.read();
+	}).then(result1 => {
+		assert_object_equals(result1, { value: 'a', done: false }, 'first chunk should be as expected');
+
+		return reader.read();
+	}).then(result2 => {
+		assert_object_equals(result2, { value: 'b', done: false }, 'second chunk should be as expected');
+
+		return reader.read();
+	}).then(result3 => {
+		assert_object_equals(result3, { value: 'c', done: false }, 'third chunk should be as expected');
+
+		return delay(10);
+	}).then(() => {
+		// Once for after start, and once for every read.
+		assert_equals(timesCalled, 4, 'pull() should be called exactly four times');
+	});
+
+}, 'ReadableStream: should pull after start, and after every read');
 
 promise_test(() => {
 

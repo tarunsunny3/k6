@@ -7,7 +7,6 @@ import (
 	"github.com/dop251/goja"
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
-	"go.k6.io/k6/js/promises"
 )
 
 // newUint8Array instantiate a new Uint8Array object
@@ -24,23 +23,15 @@ func newUint8Array(rt *goja.Runtime, buffer []byte, byteOffset int64, length int
 
 // newResolvedPromise instantiates a new resolved promise.
 func newResolvedPromise(vu modules.VU, with goja.Value) *goja.Promise {
-	promise, resolve, _ := promises.New(vu)
-
-	go func() {
-		resolve(with)
-	}()
-
+	promise, resolve, _ := vu.Runtime().NewPromise()
+	resolve(with)
 	return promise
 }
 
 // newRejectedPromise instantiates a new rejected promise.
 func newRejectedPromise(vu modules.VU, with any) *goja.Promise {
-	promise, _, reject := promises.New(vu)
-
-	go func() {
-		reject(with)
-	}()
-
+	promise, _, reject := vu.Runtime().NewPromise()
+	reject(with)
 	return promise
 }
 

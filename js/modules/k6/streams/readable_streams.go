@@ -2,6 +2,7 @@ package streams
 
 import (
 	"errors"
+
 	"github.com/dop251/goja"
 	"go.k6.io/k6/js/common"
 	"go.k6.io/k6/js/modules"
@@ -219,7 +220,7 @@ func (stream *ReadableStream) setupReadableByteStreamControllerFromUnderlyingSou
 //
 // [specification]: https://streams.spec.whatwg.org/#set-up-readable-stream-default-controller-from-underlying-source
 func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlyingSource(
-	underlyingSource goja.Value,
+	underlyingSource *goja.Object,
 	underlyingSourceDict UnderlyingSource,
 	highWaterMark float64,
 	sizeAlgorithm SizeAlgorithm,
@@ -246,7 +247,7 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 	// which returns the result of invoking underlyingSourceDict["start"] with argument
 	// list « controller » and callback this value underlyingSource.
 	if underlyingSourceDict.startSet {
-		call, ok := goja.AssertFunction(stream.runtime.ToValue(underlyingSourceDict.Start))
+		call, ok := goja.AssertFunction(underlyingSource.Get("start"))
 		if !ok {
 			common.Throw(stream.runtime, errors.New("underlyingSource.[[start]] must be a function"))
 		}
