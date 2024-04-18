@@ -19,7 +19,7 @@ type ReadableByteStreamController struct {
 
 	// cancelAlgorithm holds A promise-returning algorithm, taking one argument (the cancel
 	// reason), which communicates a requested cancellation to the underlying byte source.
-	cancelAlgorithm func(reason any) *goja.Promise
+	cancelAlgorithm UnderlyingSourceCancelCallback
 
 	// closeRequested holds a boolean flag indicating whether the stream has been
 	// closed by its underlying byte source, but still has chunks in its internal
@@ -33,7 +33,7 @@ type ReadableByteStreamController struct {
 
 	// pullAlgorithm is a promise-returning algorithm that pulls data from the
 	// underlying byte source.
-	pullAlgorithm func() *goja.Promise
+	pullAlgorithm UnderlyingSourcePullCallback
 
 	// FIXME: should this be atomic?
 	// pulling is a boolean flag set to true while the underlying byte source's pull
@@ -303,26 +303,30 @@ func (controller *ReadableByteStreamController) releaseSteps() {
 	panic("not implemented") // TODO: Implement
 }
 
-func (controller *ReadableByteStreamController) error(err error) {
-	// 1.
+// error implements the [ReadableByteStreamControllerError(e)] specification
+// algorithm.
+//
+// [ReadableByteStreamControllerError(e)]: https://streams.spec.whatwg.org/#readable-byte-stream-controller-error
+func (controller *ReadableByteStreamController) error(e any) {
+	// 1. Let stream be controller.[[stream]].
 	stream := controller.stream
 
-	// 2.
+	// 2. If stream.[[state]] is not "readable", return.
 	if stream.state != ReadableStreamStateReadable {
 		return
 	}
 
-	// 3.
+	// 3. Perform ! ReadableByteStreamControllerClearPendingPullIntos(controller).
 	controller.clearPendingPullIntos()
 
-	// 4.
+	// 4. Perform ! ResetQueue(controller).
 	controller.resetQueue()
 
-	// 5.
+	// 5. Perform ! ReadableByteStreamControllerClearAlgorithms(controller).
 	controller.clearAlgorithms()
 
-	// 6.
-	stream.error(err)
+	// 6. Perform ! ReadableStreamError(stream, e).
+	stream.error(e)
 }
 
 // respond implements the ReadableByteStreamControllerRespond(bytesWritten) [specification].
@@ -552,49 +556,57 @@ func (controller *ReadableByteStreamController) invalidateBYOBRequest() {
 //
 // [specification]: https://streams.spec.whatwg.org/#readable-byte-stream-controller-call-pull-if-needed
 func (controller *ReadableByteStreamController) callPullIfNeeded() {
-	// 1.
+	// 1. Let shouldPull be ! ReadableByteStreamControllerShouldCallPull(controller).
 	shouldPull := controller.shouldCallPull()
 
-	// 2.
+	// 2. If shouldPull is false, return.
 	if !shouldPull {
 		return
 	}
 
-	// 3.
+	// 3. If controller.[[pulling]] is true,
 	if controller.pulling {
+		// 3.1. Set controller.[[pullAgain]] to true.
 		controller.pullAgain = true
+
+		// 3.2. Return.
 		return
 	}
 
-	// 4.
+	// 4. Assert: controller.[[pullAgain]] is false.
 	if controller.pullAgain {
 		common.Throw(controller.stream.vu.Runtime(), newError(AssertionError, "pullAgain should be false"))
 	}
 
-	// 5.
+	// 5. Set controller.[[pulling]] to true.
 	controller.pulling = true
 
-	// 6.
-	pullPromise := controller.pullAlgorithm()
+	// 6. Let pullPromise be the result of performing controller.[[pullAlgorithm]].
+	controllerObj, err := controller.toObject()
+	if err != nil {
+		common.Throw(controller.stream.vu.Runtime(), newError(RuntimeError, err.Error()))
+	}
+	pullPromise := controller.pullAlgorithm(controllerObj)
 
-	_, err := promiseThen(controller.stream.runtime, pullPromise,
-		// 7. upon fulfillment
+	_, err = promiseThen(controller.stream.vu.Runtime(), pullPromise,
+		// 7. Upon fulfillment of pullPromise,
 		func(value goja.Value) {
-			// 7.1.
+			// 7.1. Set controller.[[pulling]] to false.
 			controller.pulling = false
 
-			// 7.2.
+			// 7.2. If controller.[[pullAgain]] is true,
 			if controller.pullAgain {
+				// 7.2.1. Set controller.[[pullAgain]] to false.
 				controller.pullAgain = false
+				// 7.2.2. Perform ! ReadableByteStreamControllerCallPullIfNeeded(controller).
 				controller.callPullIfNeeded()
 			}
 		},
 
-		// 8. upon rejection
+		// 8. Upon rejection of pullPromise with reason e,
 		func(reason goja.Value) {
-			// FIXME: I'm pretty sure this doesn't work, we should probably pass down goja.Value all the way instead of error
-			reasonError, _ := reason.Export().(error)
-			controller.error(reasonError)
+			// 8.1. Perform ! ReadableByteStreamControllerError(controller, e).
+			controller.error(reason)
 		},
 	)
 	if err != nil {
@@ -606,47 +618,48 @@ func (controller *ReadableByteStreamController) callPullIfNeeded() {
 //
 // [specification]: https://streams.spec.whatwg.org/#readable-byte-stream-controller-should-call-pull
 func (controller *ReadableByteStreamController) shouldCallPull() bool {
-	// 1.
+	// 1. Let stream be controller.[[stream]].
 	stream := controller.stream
 
-	// 2.
+	// 2. If stream.[[state]] is not "readable", return false.
 	if stream.state != ReadableStreamStateReadable {
 		return false
 	}
 
-	// 3.
+	// 3. If controller.[[closeRequested]] is true, return false.
 	if controller.closeRequested {
 		return false
 	}
 
-	// 4.
+	// 4. If controller.[[started]] is false, return false.
 	if !controller.started {
 		return false
 	}
 
-	// 5.
+	// 5. If ! ReadableStreamHasDefaultReader(stream) is true and ! ReadableStreamGetNumReadRequests(stream) > 0, return true.
 	if stream.hasDefaultReader() && stream.getNumReadRequests() > 0 {
 		return true
 	}
 
-	// 6.
+	// 6. If ! ReadableStreamHasBYOBReader(stream) is true and ! ReadableStreamGetNumReadIntoRequests(stream) > 0, return true.
 	if stream.hasBYOBReader() && stream.getNumReadIntoRequests() > 0 {
 		return true
 	}
 
-	// 7.
+	// 7. Let desiredSize be ! ReadableByteStreamControllerGetDesiredSize(controller).
 	desiredSize := controller.getDesiredSize()
 
-	// 8.
+	// 8. Assert: desiredSize is not null.
 	if !desiredSize.Valid {
-		common.Throw(controller.stream.vu.Runtime(), newError(AssertionError, "desiredSize is nil"))
+		throw(controller.stream.vu.Runtime(), newError(AssertionError, "desiredSize is nil"))
 	}
 
-	// 9.
+	// 9. If desiredSize > 0, return true.
 	if desiredSize.ValueOrZero() > 0 {
 		return true
 	}
 
+	// 10. Return false.
 	return false
 }
 
@@ -999,21 +1012,24 @@ func (controller *ReadableByteStreamController) enqueueChunkToQueue(buffer goja.
 	controller.queueTotalSize += byteLength
 }
 
+// getDesiredSize implements the [ReadableByteStreamControllerGetDesiredSize()] algorithm.
+//
+// [ReadableByteStreamControllerGetDesiredSize()]: https://streams.spec.whatwg.org/#readable-byte-stream-controller-get-desired-size
 func (controller *ReadableByteStreamController) getDesiredSize() null.Int {
-	// 1.
+	// 1. Let state be controller.[[stream]].[[state]].
 	state := controller.stream.state
 
-	// 2.
+	// 2. If state is "errored", return null.
 	if state == ReadableStreamStateErrored {
 		return null.Int{}
 	}
 
-	// 3.
+	// 3. If state is "closed", return 0.
 	if state == ReadableStreamStateClosed {
 		return null.IntFrom(0)
 	}
 
-	// 4.
+	// 4. Return controller.[[strategyHWM]] − controller.[[queueTotalSize]].
 	return null.IntFrom(controller.strategyHWM - controller.queueTotalSize)
 }
 

@@ -406,14 +406,14 @@ func (controller *ReadableStreamDefaultController) callPullIfNeeded() {
 	_, err = promiseThen(controller.stream.vu.Runtime(), pullPromise,
 		// 7. Upon fulfillment of pullPromise
 		func(value goja.Value) {
-			// 1. Set controller.[[pulling]] to false.
+			// 7.1. Set controller.[[pulling]] to false.
 			controller.pulling = false
 
-			// 2. If controller.[[pullAgain]] is true,
+			// 7.2. If controller.[[pullAgain]] is true,
 			if controller.pullAgain {
-				// 2.1. Set controller.[[pullAgain]] to false.
+				// 7.2.1. Set controller.[[pullAgain]] to false.
 				controller.pullAgain = false
-				// 2.2. Perform ! ReadableStreamDefaultControllerCallPullIfNeeded(controller).
+				// 7.2.2. Perform ! ReadableStreamDefaultControllerCallPullIfNeeded(controller).
 				controller.callPullIfNeeded()
 			}
 		},

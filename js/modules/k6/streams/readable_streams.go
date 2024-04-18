@@ -414,7 +414,6 @@ func (stream *ReadableStream) setupDefaultController(
 // setUpReadableByteStreamController implements the specification's [SetUpReadableByteStreamController()] abstract operation.
 //
 // [SetUpReadableByteStreamController()]: https://streams.spec.whatwg.org/#set-up-readable-byte-stream-controller
-// FIXME: Try to unify it with setupDefaultController.
 func (stream *ReadableStream) setUpReadableByteStreamController(
 	controller *ReadableByteStreamController,
 	startAlgorithm UnderlyingSourceStartCallback,
@@ -431,7 +430,7 @@ func (stream *ReadableStream) setUpReadableByteStreamController(
 	// 2. If autoAllocateChunkSize is not undefined,
 	if autoAllocateChunkSize.Valid {
 		// 2.1. Assert: ! IsInteger(autoAllocateChunkSize) is true.
-		// 2.1. Assert: autoAllocateChunkSize is positive.
+		// 2.2. Assert: autoAllocateChunkSize is positive.
 		if autoAllocateChunkSize.Int64 <= 0 {
 			common.Throw(stream.vu.Runtime(), newError(AssertionError, "underlyingSource.[[autoAllocateChunkSize]] must be > 0"))
 		}
@@ -458,8 +457,10 @@ func (stream *ReadableStream) setUpReadableByteStreamController(
 	controller.strategyHWM = int64(highWaterMark)
 
 	// 9. Set controller.[[pullAlgorithm]] to pullAlgorithm.
+	controller.pullAlgorithm = pullAlgorithm
 
 	// 10. Set controller.[[cancelAlgorithm]] to cancelAlgorithm.
+	controller.cancelAlgorithm = cancelAlgorithm
 
 	// 11. Set controller.[[autoAllocateChunkSize]] to autoAllocateChunkSize.
 	if autoAllocateChunkSize.Valid {
@@ -473,22 +474,54 @@ func (stream *ReadableStream) setUpReadableByteStreamController(
 	stream.controller = controller
 
 	// 14. Let startResult be the result of performing startAlgorithm.
+	controllerObj, err := controller.toObject()
+	if err != nil {
+		common.Throw(controller.stream.vu.Runtime(), newError(RuntimeError, err.Error()))
+	}
+	startResult := startAlgorithm(controllerObj)
 
 	// 15. Let startPromise be a promise resolved with startResult.
+	var startPromise *goja.Promise
+	if common.IsNullish(startResult) {
+		startPromise = newResolvedPromise(controller.stream.vu, startResult)
+	} else if p, ok := startResult.Export().(*goja.Promise); ok {
+		if p.State() == goja.PromiseStateRejected {
+			controller.error(p.Result())
+		}
+		startPromise = p
+	} else {
+		startPromise = newResolvedPromise(controller.stream.vu, startResult)
+	}
 
-	// 16. Upon fulfillment of startPromise,
+	_, err = promiseThen(stream.vu.Runtime(), startPromise,
+		// 16. Upon fulfillment of startPromise,
+		func(goja.Value) {
+			// 16.1. Set controller.[[started]] to true.
+			controller.started = true
 
-	// 17. Set controller.[[started]] to true.
+			// 16.2. Assert: controller.[[pulling]] is false.
+			if controller.pulling {
+				common.Throw(stream.vu.Runtime(), newError(AssertionError, "controller `pulling` state is not false"))
+			}
 
-	// 18. Assert: controller.[[pulling]] is false.
+			// 16.3. Assert: controller.[[pullAgain]] is false.
+			if controller.pullAgain {
+				common.Throw(stream.vu.Runtime(), newError(AssertionError, "controller `pullAgain` state is not false"))
+			}
 
-	// 19. Assert: controller.[[pullAgain]] is false.
+			// 16.4. Perform ! ReadableByteStreamControllerCallPullIfNeeded(controller).
+			controller.callPullIfNeeded()
+		},
 
-	// 20. Perform ! ReadableByteStreamControllerCallPullIfNeeded(controller).
-
-	// 21. Upon rejection of startPromise with reason r,
-
-	// 22. Perform ! ReadableByteStreamControllerError(controller, r).
+		// 17. Upon rejection of startPromise with reason r,
+		func(err goja.Value) {
+			// 17.1. Perform ! ReadableByteStreamControllerError(controller, r).
+			controller.error(err)
+		},
+	)
+	if err != nil {
+		common.Throw(stream.vu.Runtime(), err)
+	}
 }
 
 // setupDefaultReader implements the specification's [SetUpReadableStreamDefaultReader()] abstract operation.
@@ -514,22 +547,21 @@ func (stream *ReadableStream) setupDefaultReader(reader *ReadableStreamDefaultRe
 //
 // [SetUpReadableStreamBYOBReader()]: https://streams.spec.whatwg.org/#set-up-readable-stream-byob-reader
 func (stream *ReadableStream) setupBYOBReader(reader *ReadableStreamBYOBReader) {
-	// 1.
+	// 1. If ! IsReadableStreamLocked(stream) is true, throw a TypeError exception.
 	if stream.isLocked() {
-		common.Throw(stream.vu.Runtime(), newError(TypeError, "cannot create a reader for a locked stream"))
+		throw(stream.vu.Runtime(), newError(TypeError, "cannot set a reader for a locked stream"))
 	}
 
-	// 2.
+	// 2. If stream.[[controller]] does not implement ReadableByteStreamController, throw a TypeError exception.
 	_, ok := stream.controller.(*ReadableByteStreamController)
 	if !ok {
-		common.Throw(stream.vu.Runtime(), newError(TypeError, "stream controller is not a ReadableByteStreamController"))
+		throw(stream.vu.Runtime(), newError(TypeError, "stream controller is not a ReadableByteStreamController"))
 	}
 
-	// 3.
-	// reader.ReadableStreamGenericReader.initialize(stream)
+	// 3. Perform ! ReadableStreamReaderGenericInitialize(reader, stream).
 	ReadableStreamReaderGenericInitialize(reader, stream)
 
-	// 4.
+	// 4. Set reader.[[readIntoRequests]] to a new empty list.
 	reader.readIntoRequests = []ReadIntoRequest{}
 }
 
@@ -551,16 +583,13 @@ func (stream *ReadableStream) acquireDefaultReader() *ReadableStreamDefaultReade
 //
 // [AcquireReadableStreamBYOBReader()]: https://streams.spec.whatwg.org/#acquire-readable-stream-byob-reader
 func (stream *ReadableStream) acquireBYOBReader() *ReadableStreamBYOBReader {
-	// 1. let reader b a new ReadableStreamBYOBReader
-	// FIXME: remove this?
-	// reader := NewReadableStreamBYOBReader(stream)
+	// 1. Let reader be a new ReadableStreamBYOBReader.
 	reader := &ReadableStreamBYOBReader{}
 
-	// 2.
-	// TODO: implement this!
+	// 2. Perform ? SetUpReadableStreamBYOBReader(reader, stream).
 	stream.setupBYOBReader(reader)
 
-	// 3.
+	// 3. Return reader.
 	return reader
 }
 
