@@ -54,7 +54,7 @@ func (mi *ModuleInstance) Exports() modules.Exports {
 
 // NewReadableStream is the constructor for the ReadableStream object.
 func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Object {
-	runtime := mi.vu.Runtime()
+	rt := mi.vu.Runtime()
 	var err error
 
 	// 1. If underlyingSource is missing, set it to null.
@@ -74,14 +74,14 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	if len(call.Arguments) > 0 && !goja.IsUndefined(call.Arguments[0]) {
 		// We first assert that it is an object (requirement)
 		if !isObject(call.Arguments[0]) {
-			throw(runtime, newError(TypeError, "underlyingSource must be an object"))
+			throw(rt, newError(TypeError, "underlyingSource must be an object"))
 		}
 
 		// Then we try to convert it to an UnderlyingSource
-		underlyingSource = call.Arguments[0].ToObject(runtime)
-		underlyingSourceDict, err = NewUnderlyingSourceFromObject(runtime, underlyingSource)
+		underlyingSource = call.Arguments[0].ToObject(rt)
+		underlyingSourceDict, err = NewUnderlyingSourceFromObject(rt, underlyingSource)
 		if err != nil {
-			throw(runtime, err)
+			throw(rt, err)
 		}
 	}
 
@@ -96,31 +96,48 @@ func (mi *ModuleInstance) NewReadableStream(call goja.ConstructorCall) *goja.Obj
 	if underlyingSourceDict.Type == "bytes" {
 		// 4.1. If strategy["size"] exists, throw a RangeError exception.
 		if strategy.Get("size") != nil {
-			common.Throw(runtime, newError(RangeError, "size function must not be set for byte streams"))
+			common.Throw(rt, newError(RangeError, "size function must not be set for byte streams"))
 		}
 
 		// 4.2. Let highWaterMark be ? ExtractHighWaterMark(strategy, 0).
-		highWaterMark := extractHighWaterMark(runtime, strategy, 0)
+		highWaterMark := extractHighWaterMark(rt, strategy, 0)
 
 		// 4.3. Perform ? SetUpReadableByteStreamControllerFromUnderlyingSource(this, underlyingSource, underlyingSourceDict, highWaterMark).
 		stream.setupReadableByteStreamControllerFromUnderlyingSource(underlyingSource, underlyingSourceDict, highWaterMark)
 	} else { // 5. Otherwise,
 		// 5.1. Assert: underlyingSourceDict["type"] does not exist.
 		if underlyingSourceDict.Type != "" {
-			common.Throw(runtime, newError(AssertionError, "type must not be set for non-byte streams"))
+			common.Throw(rt, newError(AssertionError, "type must not be set for non-byte streams"))
 		}
 
 		// 5.2. Let sizeAlgorithm be ! ExtractSizeAlgorithm(strategy).
-		sizeAlgorithm := extractSizeAlgorithm(runtime, strategy)
+		sizeAlgorithm := extractSizeAlgorithm(rt, strategy)
 
 		// 5.3. Let highWaterMark be ? ExtractHighWaterMark(strategy, 1).
-		highWaterMark := extractHighWaterMark(runtime, strategy, 1)
+		highWaterMark := extractHighWaterMark(rt, strategy, 1)
 
 		// 5.4. Perform ? SetUpReadableStreamDefaultControllerFromUnderlyingSource(this, underlyingSource, underlyingSourceDict, highWaterMark, sizeAlgorithm).
 		stream.setupReadableStreamDefaultControllerFromUnderlyingSource(underlyingSource, underlyingSourceDict, highWaterMark, sizeAlgorithm)
 	}
 
-	return runtime.ToValue(stream).ToObject(runtime)
+	streamObj := rt.ToValue(stream).ToObject(rt)
+
+	proto := call.This.Prototype()
+	if proto.Get("locked") == nil {
+		err = proto.DefineAccessorProperty("locked", rt.ToValue(func() goja.Value {
+			return rt.ToValue(stream.Locked)
+		}), nil, goja.FLAG_FALSE, goja.FLAG_TRUE)
+		if err != nil {
+			common.Throw(rt, newError(RuntimeError, err.Error()))
+		}
+	}
+
+	err = streamObj.SetPrototype(proto)
+	if err != nil {
+		common.Throw(rt, newError(RuntimeError, err.Error()))
+	}
+
+	return streamObj
 }
 func defaultSizeFunc(_ goja.Value) (float64, error) { return 1.0, nil }
 

@@ -40,8 +40,7 @@ type ReadableStream struct {
 	// storedError holds the error that caused the stream to be errored
 	storedError any
 
-	// FIXME: Do we really need it? Some WPTs manipulate this.
-	Source any
+	Source *goja.Object
 
 	runtime *goja.Runtime
 	vu      modules.VU
@@ -255,9 +254,8 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 		startAlgorithm = func(obj *goja.Object) (v goja.Value) {
 			var err error
 			v, err = call(underlyingSource, obj)
-			// FIXME: Do something meaningful with error
 			if err != nil {
-				panic(err)
+				panic(err) // FIXME: Is it correct? Looks like.
 			}
 
 			return v
@@ -286,11 +284,20 @@ func (stream *ReadableStream) setupReadableStreamDefaultControllerFromUnderlying
 	// reason and returns the result of invoking underlyingSourceDict["cancel"] with argument list « reason » and
 	// callback this value underlyingSource.
 	if underlyingSourceDict.cancelSet {
+		call, ok := goja.AssertFunction(underlyingSource.Get("cancel"))
+		if !ok {
+			common.Throw(stream.runtime, errors.New("underlyingSource.[[cancel]] must be a function"))
+		}
+
 		cancelAlgorithm = func(reason any) goja.Value {
 			var p *goja.Promise
 
 			if e := stream.runtime.Try(func() {
-				res := underlyingSourceDict.Cancel(reason)
+				res, err := call(underlyingSource, stream.runtime.ToValue(reason))
+				if err != nil {
+					panic(err) // FIXME: Is it correct? Looks like.
+				}
+
 				if cp, ok := res.Export().(*goja.Promise); ok {
 					p = cp
 				}
@@ -362,47 +369,43 @@ func (stream *ReadableStream) setupDefaultController(
 	startResult := startAlgorithm(controllerObj)
 
 	// 10. Let startPromise be a promise with startResult.
-	// See below
-
-	// 11. Upon fulfillment of startPromise,
-	onFulfill := func(goja.Value) {
-		// 11.1. Set controller.[[started]] to true.
-		controller.started = true
-
-		// 11.2. Assert: controller.[[pulling]] is false.
-		if controller.pulling {
-			common.Throw(stream.vu.Runtime(), newError(AssertionError, "controller `pulling` state is not false"))
-		}
-
-		// 11.3. Assert: controller.[[pullAgain]] is false.
-		if controller.pullAgain {
-			common.Throw(stream.vu.Runtime(), newError(AssertionError, "controller `pullAgain` state is not false"))
-		}
-
-		// 11.4. Perform ! ReadableStreamDefaultControllerCallPullIfNeeded(controller).
-		controller.callPullIfNeeded()
-	}
-
-	// 12. Upon rejection of startPromise with reason r,
-	onReject := func(err goja.Value) {
-		controller.error(err)
-	}
-
+	var startPromise *goja.Promise
 	if common.IsNullish(startResult) {
-		onFulfill(startResult)
-		return
+		startPromise = newResolvedPromise(controller.stream.vu, startResult)
+	} else if p, ok := startResult.Export().(*goja.Promise); ok {
+		if p.State() == goja.PromiseStateRejected {
+			controller.error(p.Result())
+		}
+		startPromise = p
+	} else {
+		startPromise = newResolvedPromise(controller.stream.vu, startResult)
 	}
 
-	p, ok := startResult.Export().(*goja.Promise)
-	if !ok {
-		onFulfill(startResult)
-		return
-	}
+	_, err = promiseThen(stream.vu.Runtime(), startPromise,
+		// 11. Upon fulfillment of startPromise,
+		func(goja.Value) {
+			// 11.1. Set controller.[[started]] to true.
+			controller.started = true
 
-	if p.State() == goja.PromiseStateRejected {
-		onReject(p.Result())
-	}
-	_, err = promiseThen(stream.vu.Runtime(), p, onFulfill, onReject)
+			// 11.2. Assert: controller.[[pulling]] is false.
+			if controller.pulling {
+				common.Throw(stream.vu.Runtime(), newError(AssertionError, "controller `pulling` state is not false"))
+			}
+
+			// 11.3. Assert: controller.[[pullAgain]] is false.
+			if controller.pullAgain {
+				common.Throw(stream.vu.Runtime(), newError(AssertionError, "controller `pullAgain` state is not false"))
+			}
+
+			// 11.4. Perform ! ReadableStreamDefaultControllerCallPullIfNeeded(controller).
+			controller.callPullIfNeeded()
+		},
+
+		// 12. Upon rejection of startPromise with reason r,
+		func(err goja.Value) {
+			controller.error(err)
+		},
+	)
 	if err != nil {
 		common.Throw(stream.vu.Runtime(), err)
 	}

@@ -10,8 +10,8 @@ error1.name = 'error1';
 test(() => {
 
 	new ReadableStream(); // ReadableStream constructed with no parameters
-	new ReadableStream({}); // ReadableStream constructed with an empty object as parameter
-	new ReadableStream({type: undefined}); // ReadableStream constructed with undefined type
+	new ReadableStream({ }); // ReadableStream constructed with an empty object as parameter
+	new ReadableStream({ type: undefined }); // ReadableStream constructed with undefined type
 	new ReadableStream(undefined); // ReadableStream constructed with undefined as parameter
 
 	let x;
@@ -27,32 +27,20 @@ test(() => {
 
 test(() => {
 
-	assert_throws_js(TypeError, () => new ReadableStream({type: null}),
+	assert_throws_js(TypeError, () => new ReadableStream({ type: null }),
 		'constructor should throw when the type is null');
-	assert_throws_js(TypeError, () => new ReadableStream({type: ''}),
+	assert_throws_js(TypeError, () => new ReadableStream({ type: '' }),
 		'constructor should throw when the type is empty string');
-	assert_throws_js(TypeError, () => new ReadableStream({type: 'asdf'}),
+	assert_throws_js(TypeError, () => new ReadableStream({ type: 'asdf' }),
 		'constructor should throw when the type is asdf');
 	assert_throws_exactly(
 		error1,
-		() => new ReadableStream({
-			type: {
-				get toString() {
-					throw error1;
-				}
-			}
-		}),
+		() => new ReadableStream({ type: { get toString() { throw error1; } } }),
 		'constructor should throw when ToString() throws'
 	);
 	assert_throws_exactly(
 		error1,
-		() => new ReadableStream({
-			type: {
-				toString() {
-					throw error1;
-				}
-			}
-		}),
+		() => new ReadableStream({ type: { toString() { throw error1; } } }),
 		'constructor should throw when ToString() throws'
 	);
 
@@ -61,20 +49,20 @@ test(() => {
 test(() => {
 
 	assert_throws_js(TypeError, () => {
-		new ReadableStream({start: 'potato'});
+		new ReadableStream({ start: 'potato' });
 	}, 'constructor should throw when start is not a function');
 
 }, 'ReadableStream constructor should throw for non-function start arguments');
 
 test(() => {
 
-	assert_throws_js(TypeError, () => new ReadableStream({cancel: '2'}), 'constructor should throw');
+	assert_throws_js(TypeError, () => new ReadableStream({ cancel: '2' }), 'constructor should throw');
 
 }, 'ReadableStream constructor will not tolerate initial garbage as cancel argument');
 
 test(() => {
 
-	assert_throws_js(TypeError, () => new ReadableStream({pull: {}}), 'constructor should throw');
+	assert_throws_js(TypeError, () => new ReadableStream({ pull: { } }), 'constructor should throw');
 
 }, 'ReadableStream constructor will not tolerate initial garbage as pull argument');
 
@@ -84,7 +72,7 @@ test(() => {
 
 	const source = {
 		start() {
-			assert_true(this, source, 'source is this during start');
+			assert_equals(this, source, 'source is this during start');
 			startCalled = true;
 		}
 	};
@@ -127,9 +115,7 @@ test(() => {
 
 promise_test(() => {
 
-	function SimpleStreamSource() {
-	}
-
+	function SimpleStreamSource() {}
 	let resolve;
 	const promise = new Promise(r => resolve = r);
 	SimpleStreamSource.prototype = {
@@ -154,7 +140,7 @@ promise_test(() => {
 
 	const reader = rs.getReader();
 	return reader.read().then(r => {
-		assert_object_equals(r, {value: 'a', done: false}, 'value read should be the one enqueued');
+		assert_object_equals(r, { value: 'a', done: false }, 'value read should be the one enqueued');
 		return reader.closed;
 	});
 
@@ -182,7 +168,7 @@ promise_test(() => {
 promise_test(() => {
 
 	const objects = [
-		{potato: 'Give me more!'},
+		{ potato: 'Give me more!' },
 		'test',
 		1
 	];
@@ -199,9 +185,9 @@ promise_test(() => {
 	const reader = rs.getReader();
 
 	return Promise.all([reader.read(), reader.read(), reader.read(), reader.closed]).then(r => {
-		assert_object_equals(r[0], {value: objects[0], done: false}, 'value read should be the one enqueued');
-		assert_object_equals(r[1], {value: objects[1], done: false}, 'value read should be the one enqueued');
-		assert_object_equals(r[2], {value: objects[2], done: false}, 'value read should be the one enqueued');
+		assert_object_equals(r[0], { value: objects[0], done: false }, 'value read should be the one enqueued');
+		assert_object_equals(r[1], { value: objects[1], done: false }, 'value read should be the one enqueued');
+		assert_object_equals(r[2], { value: objects[2], done: false }, 'value read should be the one enqueued');
 	});
 
 }, 'ReadableStream should be able to enqueue different objects.');
@@ -286,35 +272,34 @@ promise_test(() => {
 
 }, 'ReadableStream: should call pull when trying to read from a started, empty stream');
 
-// FIXME: Revisit this test.
-// promise_test(() => {
-//
-// 	let pullCount = 0;
-//
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			c.enqueue('a');
-// 		},
-// 		pull() {
-// 			pullCount++;
-// 		}
-// 	});
-//
-// 	const read = rs.getReader().read();
-// 	assert_equals(pullCount, 0, 'calling read() should not cause pull to be called yet');
-//
-// 	return flushAsyncEvents().then(() => {
-// 		assert_equals(pullCount, 1, 'pull should be called once start finishes');
-// 		return read;
-// 	}).then(r => {
-// 		assert_object_equals(r, { value: 'a', done: false }, 'first read() should return first chunk');
-// 		assert_equals(pullCount, 1, 'pull should not have been called again');
-// 		return delay(10);
-// 	}).then(() => {
-// 		assert_equals(pullCount, 1, 'pull should be called exactly once');
-// 	});
-//
-// }, 'ReadableStream: should only call pull once on a non-empty stream read from before start fulfills');
+promise_test(() => {
+
+	let pullCount = 0;
+
+	const rs = new ReadableStream({
+		start(c) {
+			c.enqueue('a');
+		},
+		pull() {
+			pullCount++;
+		}
+	});
+
+	const read = rs.getReader().read();
+	assert_equals(pullCount, 0, 'calling read() should not cause pull to be called yet');
+
+	return flushAsyncEvents().then(() => {
+		assert_equals(pullCount, 1, 'pull should be called once start finishes');
+		return read;
+	}).then(r => {
+		assert_object_equals(r, { value: 'a', done: false }, 'first read() should return first chunk');
+		assert_equals(pullCount, 1, 'pull should not have been called again');
+		return delay(10);
+	}).then(() => {
+		assert_equals(pullCount, 1, 'pull should be called exactly once');
+	});
+
+}, 'ReadableStream: should only call pull once on a non-empty stream read from before start fulfills');
 
 promise_test(() => {
 
@@ -430,7 +415,7 @@ promise_test(() => {
 		.then(result1 => {
 			assert_equals(timesCalled, 1,
 				'pull should have been called once after start, but not yet have been called a second time');
-			assert_object_equals(result1, {value: 1, done: false}, 'read() should fulfill with the enqueued value');
+			assert_object_equals(result1, { value: 1, done: false }, 'read() should fulfill with the enqueued value');
 
 			return delay(10);
 		}).then(() => {
@@ -591,8 +576,8 @@ promise_test(t => {
 
 promise_test(t => {
 
-	const controllerError = {name: 'controller error'};
-	const thrownError = {name: 'thrown error'};
+	const controllerError = { name: 'controller error' };
+	const thrownError = { name: 'thrown error' };
 
 	const rs = new ReadableStream({
 		pull(c) {
@@ -640,49 +625,48 @@ test(() => {
 
 }, 'ReadableStream: enqueue should throw when the stream is closed');
 
-// FIXME: This test challenges the use of "this", which is complex with goja?
-// promise_test(() => {
-//
-// 	let startCalled = 0;
-// 	let pullCalled = 0;
-// 	let cancelCalled = 0;
-//
-// 	/* eslint-disable no-use-before-define */
-// 	class Source {
-// 		start(c) {
-// 			startCalled++;
-// 			assert_equals(this, theSource, 'start() should be called with the correct this');
-// 			c.enqueue('a');
-// 		}
-//
-// 		pull() {
-// 			pullCalled++;
-// 			assert_equals(this, theSource, 'pull() should be called with the correct this');
-// 		}
-//
-// 		cancel() {
-// 			cancelCalled++;
-// 			assert_equals(this, theSource, 'cancel() should be called with the correct this');
-// 		}
-// 	}
-// 	/* eslint-enable no-use-before-define */
-//
-// 	const theSource = new Source();
-// 	theSource.debugName = 'the source object passed to the constructor'; // makes test failures easier to diagnose
-//
-// 	const rs = new ReadableStream(theSource);
-// 	const reader = rs.getReader();
-//
-// 	return reader.read().then(() => {
-// 		reader.releaseLock();
-// 		rs.cancel();
-// 		assert_equals(startCalled, 1);
-// 		assert_equals(pullCalled, 1);
-// 		assert_equals(cancelCalled, 1);
-// 		return rs.getReader().closed;
-// 	});
-//
-// }, 'ReadableStream: should call underlying source methods as methods');
+promise_test(() => {
+
+	let startCalled = 0;
+	let pullCalled = 0;
+	let cancelCalled = 0;
+
+	/* eslint-disable no-use-before-define */
+	class Source {
+		start(c) {
+			startCalled++;
+			assert_equals(this, theSource, 'start() should be called with the correct this');
+			c.enqueue('a');
+		}
+
+		pull() {
+			pullCalled++;
+			assert_equals(this, theSource, 'pull() should be called with the correct this');
+		}
+
+		cancel() {
+			cancelCalled++;
+			assert_equals(this, theSource, 'cancel() should be called with the correct this');
+		}
+	}
+	/* eslint-enable no-use-before-define */
+
+	const theSource = new Source();
+	theSource.debugName = 'the source object passed to the constructor'; // makes test failures easier to diagnose
+
+	const rs = new ReadableStream(theSource);
+	const reader = rs.getReader();
+
+	return reader.read().then(() => {
+		reader.releaseLock();
+		rs.cancel();
+		assert_equals(startCalled, 1);
+		assert_equals(pullCalled, 1);
+		assert_equals(cancelCalled, 1);
+		return rs.getReader().closed;
+	});
+
+}, 'ReadableStream: should call underlying source methods as methods');
 
 test(() => {
 	new ReadableStream({
@@ -708,30 +692,29 @@ test(() => {
 	});
 }, 'ReadableStream: desiredSize when errored');
 
-// FIXME: This test challenges the extension of ReadableStream, prototyping, etc. Is it possible with goja?
-// test(() => {
-// 	class Subclass extends ReadableStream {
-// 		extraFunction() {
-// 			return true;
-// 		}
-// 	}
-// 	assert_equals(
-// 		Object.getPrototypeOf(Subclass.prototype), ReadableStream.prototype,
-// 		'Subclass.prototype\'s prototype should be ReadableStream.prototype');
-// 	assert_equals(Object.getPrototypeOf(Subclass), ReadableStream,
-// 		'Subclass\'s prototype should be ReadableStream');
-// 	const sub = new Subclass();
-// 	assert_true(sub instanceof ReadableStream,
-// 		'Subclass object should be an instance of ReadableStream');
-// 	assert_true(sub instanceof Subclass,
-// 		'Subclass object should be an instance of Subclass');
-// 	const lockedGetter = Object.getOwnPropertyDescriptor(
-// 		ReadableStream.prototype, 'locked').get;
-// 	assert_equals(lockedGetter.call(sub), sub.locked,
-// 		'Subclass object should pass brand check');
-// 	assert_true(sub.extraFunction(),
-// 		'extraFunction() should be present on Subclass object');
-// }, 'Subclassing ReadableStream should work');
+test(() => {
+	class Subclass extends ReadableStream {
+		extraFunction() {
+			return true;
+		}
+	}
+	assert_equals(
+		Object.getPrototypeOf(Subclass.prototype), ReadableStream.prototype,
+		'Subclass.prototype\'s prototype should be ReadableStream.prototype');
+	assert_equals(Object.getPrototypeOf(Subclass), ReadableStream,
+		'Subclass\'s prototype should be ReadableStream');
+	const sub = new Subclass();
+	assert_true(sub instanceof ReadableStream,
+		'Subclass object should be an instance of ReadableStream');
+	assert_true(sub instanceof Subclass,
+		'Subclass object should be an instance of Subclass');
+	const lockedGetter = Object.getOwnPropertyDescriptor(
+		ReadableStream.prototype, 'locked').get;
+	assert_equals(lockedGetter.call(sub), sub.locked,
+		'Subclass object should pass brand check');
+	assert_true(sub.extraFunction(),
+		'extraFunction() should be present on Subclass object');
+}, 'Subclassing ReadableStream should work');
 
 test(() => {
 
@@ -796,53 +779,52 @@ promise_test(() => {
 
 }, 'ReadableStream strategies: the default strategy should continue giving desiredSize of 1 if the chunks are read immediately');
 
-// FIXME: This test is relying on t.step_func, which is not available yet in our test suite runner/runtime.
-// promise_test(t => {
-//
-// 	const randomSource = new RandomPushSource(8);
-//
-// 	const rs = new ReadableStream({
-// 		start(c) {
-// 			assert_equals(typeof c, 'object', 'c should be an object in start');
-// 			assert_equals(typeof c.enqueue, 'function', 'enqueue should be a function in start');
-// 			assert_equals(typeof c.close, 'function', 'close should be a function in start');
-// 			assert_equals(typeof c.error, 'function', 'error should be a function in start');
-//
-// 			randomSource.ondata = t.step_func(chunk => {
-// 				if (!c.enqueue(chunk) <= 0) {
-// 					randomSource.readStop();
-// 				}
-// 			});
-//
-// 			randomSource.onend = c.close.bind(c);
-// 			randomSource.onerror = c.error.bind(c);
-// 		},
-//
-// 		pull(c) {
-// 			assert_equals(typeof c, 'object', 'c should be an object in pull');
-// 			assert_equals(typeof c.enqueue, 'function', 'enqueue should be a function in pull');
-// 			assert_equals(typeof c.close, 'function', 'close should be a function in pull');
-//
-// 			randomSource.readStart();
-// 		}
-// 	});
-//
-// 	return readableStreamToArray(rs).then(chunks => {
-// 		assert_equals(chunks.length, 8, '8 chunks should be read');
-// 		for (const chunk of chunks) {
-// 			assert_equals(chunk.length, 128, 'chunk should have 128 bytes');
-// 		}
-// 	});
-//
-// }, 'ReadableStream integration test: adapting a random push source');
+promise_test(t => {
+
+	const randomSource = new RandomPushSource(8);
+
+	const rs = new ReadableStream({
+		start(c) {
+			assert_equals(typeof c, 'object', 'c should be an object in start');
+			assert_equals(typeof c.enqueue, 'function', 'enqueue should be a function in start');
+			assert_equals(typeof c.close, 'function', 'close should be a function in start');
+			assert_equals(typeof c.error, 'function', 'error should be a function in start');
+
+			randomSource.ondata = (chunk => {
+				if (!c.enqueue(chunk) <= 0) {
+					randomSource.readStop();
+				}
+				return new Promise(() => { });
+			});
+
+			randomSource.onend = c.close.bind(c);
+			randomSource.onerror = c.error.bind(c);
+		},
+
+		pull(c) {
+			assert_equals(typeof c, 'object', 'c should be an object in pull');
+			assert_equals(typeof c.enqueue, 'function', 'enqueue should be a function in pull');
+			assert_equals(typeof c.close, 'function', 'close should be a function in pull');
+
+			randomSource.readStart();
+		}
+	});
+
+	return readableStreamToArray(rs).then(chunks => {
+		assert_equals(chunks.length, 8, '8 chunks should be read');
+		for (const chunk of chunks) {
+			assert_equals(chunk.length, 128, 'chunk should have 128 bytes');
+		}
+	});
+
+}, 'ReadableStream integration test: adapting a random push source');
 
 promise_test(() => {
 
 	const rs = sequentialReadableStream(10);
 
 	return readableStreamToArray(rs).then(chunks => {
-		// FIXME: See ReadableStream.Source. How should we handle this?
-		//assert_true(rs.source.closed, 'source should be closed after all chunks are read');
+		assert_true(rs.source.closed, 'source should be closed after all chunks are read');
 		assert_array_equals(chunks, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 'the expected 10 chunks should be read');
 	});
 
@@ -850,11 +832,10 @@ promise_test(() => {
 
 promise_test(() => {
 
-	const rs = sequentialReadableStream(10, {async: true});
+	const rs = sequentialReadableStream(10, { async: true });
 
 	return readableStreamToArray(rs).then(chunks => {
-		// FIXME: See ReadableStream.Source. How should we handle this?
-		//assert_true(rs.source.closed, 'source should be closed after all chunks are read');
+		assert_true(rs.source.closed, 'source should be closed after all chunks are read');
 		assert_array_equals(chunks, [1, 2, 3, 4, 5, 6, 7, 8, 9, 10], 'the expected 10 chunks should be read');
 	});
 
