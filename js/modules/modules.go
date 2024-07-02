@@ -17,7 +17,7 @@ const extPrefix string = "k6/x/"
 // Register the given mod as an external JavaScript module that can be imported
 // by name. The name must be unique across all registered modules and must be
 // prefixed with "k6/x/", otherwise this function will panic.
-func Register(name string, mod interface{}) {
+func Register(name string, mod Module) {
 	if !strings.HasPrefix(name, extPrefix) {
 		panic(fmt.Errorf("external module names must be prefixed with '%s', tried to register: %s", extPrefix, name))
 	}
